@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Margin</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="sidepanel.js"></script>
+</head>
+<body class="panel">
+  <main>
+    <header>
+      <div class="brand"><img src="icon.svg" alt=""><h1>Margin</h1></div>
+      <nav aria-label="Margin pages"><a href="library.html" target="_blank">Cards</a><a href="review.html" target="_blank">Review</a><a href="options.html" target="_blank">Options</a></nav>
+    </header>
+    <p id="demo-banner" class="demo-banner" hidden>DEMO MODE (simulated AI)</p>
+    <div class="model-row" id="model-row">
+      <span class="badge neutral" id="model-status" role="status" aria-live="polite">Checking AI…</span>
+      <button class="secondary small" id="enable-model" type="button" hidden>Enable on-device AI</button>
+      <progress id="model-progress" aria-label="Model download" max="1" hidden></progress>
+    </div>
+
+    <section id="welcome" class="surface stack welcome" aria-labelledby="welcome-heading" hidden>
+      <h2 id="welcome-heading">Welcome to Margin</h2>
+      <p>Turn what you read into flashcards and keep more of your study on this device.</p>
+      <p class="hint" id="welcome-model"></p>
+      <div class="actions">
+        <button type="button" id="welcome-try">Try on this page</button>
+        <button type="button" id="welcome-dismiss" class="quiet">Dismiss</button>
+      </div>
+    </section>
+
+    <section id="capture-section" class="surface" aria-labelledby="capture-heading">
+      <div class="row section-heading">
+        <h2 id="capture-heading">Generate flashcards</h2>
+        <button id="edit-capture" class="quiet small" type="button" aria-expanded="true" aria-controls="capture-form" hidden>Edit capture</button>
+        <button id="try-sample" class="quiet small" type="button">Try a sample</button>
+      </div>
+      <form id="capture-form">
+        <label for="source">Source</label>
+        <select id="source">
+          <option value="selection">Selection</option>
+          <option value="page" selected>Page</option>
+          <option value="pdf">PDF</option>
+          <option value="youtube">YouTube</option>
+          <option value="image">Image</option>
+          <option value="paste">Paste</option>
+        </select>
+        <p class="hint" id="source-hint">Use the readable text on the current tab.</p>
+        <div id="paste-fields" hidden>
+          <label for="notes">Notes</label>
+          <textarea id="notes" rows="3" placeholder="Paste or type your notes here"></textarea>
+        </div>
+        <div id="image-fields" hidden>
+          <label for="image">Image file</label>
+          <input id="image" type="file" accept="image/*">
+          <div id="chosen-image" class="row" hidden>
+            <p id="image-name" class="hint"></p>
+            <button class="quiet small" id="clear-image" type="button">Clear image</button>
+          </div>
+        </div>
+        <label for="deck">Save to deck</label>
+        <div class="row">
+          <select id="deck"></select>
+          <button class="secondary" id="new-deck" type="button">New deck</button>
+        </div>
+        <button id="generate" type="submit">Generate</button>
+      </form>
+      <dialog id="deck-dialog">
+        <form id="deck-form">
+          <h2>New deck</h2>
+          <label for="deck-name">Deck name</label>
+          <input id="deck-name" required maxlength="80" autocomplete="off">
+          <p class="hint error" id="deck-error" hidden></p>
+          <div class="actions">
+            <button id="cancel-deck" class="secondary" type="button">Cancel</button>
+            <button type="submit">Create deck</button>
+          </div>
+        </form>
+      </dialog>
+    </section>
+
+    <details class="surface routing" id="routing">
+      <summary>AI routing explained</summary>
+      <ul id="routing-rules" class="routing-rules"></ul>
+    </details>
+    <dialog id="host-dialog" aria-labelledby="host-heading">
+      <form method="dialog">
+        <h2 id="host-heading">Allow access to this site?</h2>
+        <p class="hint"></p>
+        <div class="actions">
+          <button value="cancel" class="secondary" autofocus>Cancel</button>
+          <button value="allow">Allow site access</button>
+        </div>
+      </form>
+    </dialog>
+
+    <p id="toast" class="toast" role="status" aria-live="polite"></p>
+    <section id="queued" class="surface stack" aria-label="Offline queue" hidden></section>
+    <section class="previews" aria-labelledby="preview-heading">
+      <div class="row section-heading">
+        <h2 id="preview-heading" tabindex="-1">Preview</h2>
+        <span class="hint" id="preview-count"></span>
+      </div>
+      <p class="empty" id="empty-preview">Generated cards appear here for editing before you save them.</p>
+      <div id="cards" class="stack"></div>
+    </section>
+    <dialog id="cloud-dialog" aria-labelledby="cloud-heading">
+      <form method="dialog">
+        <h2 id="cloud-heading">Send to cloud anyway?</h2>
+        <p class="hint"></p>
+        <div class="actions">
+          <button value="cancel" class="secondary" autofocus>Cancel</button>
+          <button value="allow">Send to cloud</button>
+        </div>
+      </form>
+    </dialog>
+    <div class="save-bar" id="save-bar" hidden>
+      <button id="accept" type="button"></button>
+    </div>
+  </main>
+</body>
+</html>

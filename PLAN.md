@@ -1,0 +1,139 @@
+# Plan: hybrid-AI flashcard extension for #BuildHybridAI
+
+## 1. Name and tagline
+
+Name options:
+- **Margin**: "Flashcards from the margins of the web."
+- **Glean**: "Turn any tab into long-term memory."
+- **Recall Lens**: "Learn what you read, privately."
+
+**Pick: Margin.** Tagline: *"Learn what you read. Private by default, cloud when it counts."* It is a generic word, so it doesn't infringe a trademark and doesn't mention Anki. We still say "exports to Anki" in the description, which is nominative use and fine.
+
+## 2. The angle for "Quality of the Idea"
+
+The pitch is a **privacy-aware hybrid router that explains every decision.** Most entries will just set `PREFER_ON_DEVICE`. We go further in four ways:
+
+1. **Routing reasons on every card.** Each card stores a `route` record: `{source: 'on_device'|'in_cloud', reason, tokensEst, ms}`. Example reasons: `"short text, fits 9216-token budget"`, `"PDF → cloud only"`, `"Nano unavailable"`, `"privacy mode pinned"`, `"sensitive content detected → kept local"`. The UI shows these as badges. A stats panel shows "87% of cards generated on-device, 412 KB never left your machine."
+2. **On-device sensitivity check.** Before any cloud call, Nano does a quick check for PII or private content (emails, internal docs). The check combines regex with a short Nano classification and returns JSON through `responseSchema`. If it flags the content, the router pins the job on-device (chunked) or asks the user before using the cloud. This makes the hybrid behavior a feature users can see, not just a fallback.
+3. **Typed answers graded on-device during review.** The user types an answer. Nano compares it with the card's answer and returns `{verdict, missing, suggestedRating}`, which maps to an FSRS rating. Answers never leave the device, and grading works offline and on a plane. This is the strongest demo moment.
+4. **Source-anchored cards plus an offline queue.**
+   - Each card stores a text-fragment link (`url#:~:text=...`), so "Show source" jumps to the exact passage.
+   - Cloud-only jobs (PDFs, long documents) created while offline go into a queue. A pending badge shows them, and they drain on the `online` event.
+
+Image occlusion is out of scope. Screenshot-to-card covers the image case through Nano's image input.
+
+## 3. Architecture
+
+Stack: esbuild, vanilla TypeScript, no framework, `firebase@13.4.0` bundled. `ts-fsrs` (MIT) handles scheduling. `pdfjs-dist` and `sql.js` are bundled locally.
+
+```
+flashcard-ext/
+  manifest.json            # MV3; side_panel, contextMenus, storage, unlimitedStorage, activeTab, scripting, offscreen
+  build.mjs                # esbuild: entries → dist/, copies wasm/pdf.worker, MOCK flag
+  src/
+    firebase/
+      init.ts              # initializeApp(placeholder cfg), App Check debug provider
+      remoteConfig.ts      # defaults: maxOnDeviceTokens=6000, cloudModel, chunkSize, sensitivityCheck=true
+      sync.ts              # optional Firestore sync behind firebase/auth/web-extension (anon); stub-safe
+    ai/
+      provider.ts          # interface AIProvider { generate(req): {text, source, reason} ; status() }
+      firebaseProvider.ts  # getAI/getGenerativeModel(HybridParams), initializeDeviceModel, reads inferenceSource
+      mockProvider.ts      # deterministic cards; simulates on_device/in_cloud/unavailable/offline
+      router.ts            # decide(job) → {mode, reason}; chunking; privacy pin; sensitivity gate
+      prompts.ts           # card-gen, grade, sensitivity prompts + JSON schemas
+      queue.ts             # offline cloud-job queue (IndexedDB), drains on 'online'
+    sources/
+      selection.ts         # context menu + content script getSelection + text-fragment anchor
+      page.ts              # Readability-lite (main/article heuristics), strips nav
+      pdf.ts               # fetch tab URL → pdf.js text; fallback inlineData PDF → cloud
+      youtube.ts           # captionTracks from ytInitialPlayerResponse → timedtext; fallback cloud fileData URL
+      image.ts             # captureVisibleTab + crop → PNG part (on-device capable)
+      paste.ts
+    cards/
+      schema.ts            # Card, Deck, Route types; validate() (hand-rolled, no zod)
+      parse.ts             # tolerant JSON extract (fences, trailing commas), repair, cap counts
+      dedupe.ts            # normalized front hash + Jaccard on trigrams
+    srs/fsrs.ts            # ts-fsrs wrapper; rating from grader
+    storage/db.ts          # IndexedDB (cards, decks, reviews, queue); chrome.storage for settings
+    export/
+      tsv.ts               # Anki TSV with #separator/#html/#deck headers
+      apkg.ts              # sql.js collection.anki2 + media zip (stretch)
+    ui/
+      sidepanel.html/.ts   # main: generate from source, preview/edit, badges, model status/download btn
+      popup.html/.ts       # quick actions + due count
+      review.html/.ts      # review session, typed answer, on-device grading
+      options.html/.ts     # privacy mode, mode selector, RC values shown, export, mock toggle
+      styles.css
+    background.ts          # SW: context menus, messaging only (no AI here)
+  test/unit/*.test.ts      # node:test via tsx
+  test/e2e/*.spec.ts       # Playwright, persistent context, --load-extension, mock mode
+  LICENSE (Apache-2.0), README.md, docs/demo-script.md
+```
+
+All AI calls run in the side panel or review page, never in the service worker. Mock mode is enabled by the `MOCK=1` build flag or the `settings.mock` option.
+
+## 4. Milestones (one Codex run each)
+
+**M1: Scaffold and data layer**
+- Build: `build.mjs`, `manifest.json`, card schema, `parse`, `dedupe`, IndexedDB `db`, `mockProvider`, and empty UI pages.
+- Unit tests:
+  - `parse` handles fenced, malformed, and oversize JSON.
+  - `validate` rejects empty fronts.
+  - `dedupe` merges near-duplicates.
+- E2E: the extension loads; the side panel URL renders; the service worker registers.
+
+**M2: AI router and Firebase**
+- Build: `init.ts` (App Check debug provider), `remoteConfig` with defaults, `firebaseProvider`, `router`, `prompts`, chunking, sensitivity gate, offline `queue`.
+- Unit tests, with the provider injected:
+  - PDF → cloud.
+  - 20k-token text → chunked or cloud.
+  - Privacy mode → `ONLY_ON_DEVICE`, and throws a friendly error when Nano is unavailable.
+  - Sensitive content → pinned on-device.
+  - Offline → queued.
+  - Every decision returns a non-empty reason.
+- Grep check: `getGenerativeModel` and `generateContent` are actually called in `dist/`.
+
+**M3: Sources and generation pipeline**
+- Build: selection context menu, page, YouTube, image, PDF, and paste sources → router → parse → dedupe → save. Add the side panel preview/edit UI with badges and the "Enable on-device model" button.
+- Unit tests:
+  - Readability on fixture HTML.
+  - YouTube caption XML parse.
+  - pdf.js text extraction on a fixture PDF.
+- E2E: open a local fixture page, select text, trigger generation, see cards with mock badges; the edit card flow persists.
+
+**M4: SRS and review**
+- Build: FSRS wrapper, review page, typed-answer grading via the router (grading is always on-device-preferred), keyboard shortcuts 1–4, "Show source" link.
+- Unit tests:
+  - FSRS intervals increase on Good.
+  - The grader verdict maps to the correct rating.
+- E2E: review 3 due cards in mock mode; due count decrements.
+
+**M5: Export, options, privacy**
+- Build: TSV export, `.apkg` export via sql.js, options page, privacy mode, mode selector, queue UI.
+- Unit tests:
+  - The TSV round-trips with escaping.
+  - The `.apkg` zip contains `collection.anki2` with the expected note count (read back with sql.js).
+- E2E: download triggers; toggling privacy mode changes the badge reason.
+
+**M6: Polish and submission**
+- Build: stats panel (on-device %, bytes kept local), Firestore sync stub, empty and error states, README (setup, debug token, architecture diagram, judging map), demo script, Playwright-generated screenshots, Apache LICENSE, secret scan.
+- E2E: full happy path; no console errors.
+
+## 5. Key risks and mitigations
+
+- **MV3 CSP and remote code.**
+  - Bundle everything, including the pdf.js worker loaded with `chrome.runtime.getURL`.
+  - Add `"content_security_policy": {"extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"}` for sql.js.
+  - Avoid any eval in dependencies. esbuild settings: `format=esm`, `platform=browser`.
+- **App Check on the `chrome-extension://` origin.** reCAPTCHA doesn't work on extension origins. Use the debug provider (`self.FIREBASE_APPCHECK_DEBUG_TOKEN = true`, or a token injected from options), which the rules accept. Document the custom-provider path for production. Keep the Firebase config a placeholder and use mock mode for judges who have no project.
+- **Prompt API availability in extension pages.**
+  - `LanguageModel` is exposed in extension documents but not in the service worker, so do all inference in the side panel, review page, or an offscreen document.
+  - Check `LanguageModel.availability()` on startup and show the status.
+  - Chrome 139+ desktop only. Playwright Chromium lacks Nano, so e2e uses the mock and a manual demo on google-chrome shows the real thing.
+- **User activation for `initializeDeviceModel`.** Call it only from the "Enable on-device AI" button click handler. Show download progress through the callback, persist a "ready" flag, and never call it during auto-generation.
+- **9216-token on-device limit and JSON reliability.** Estimate tokens at chars/4. Chunk to the `maxOnDeviceTokens` value from Remote Config (default 6000). Use `responseSchema` for structured output, the tolerant parser with one repair retry, and a cap on cards per chunk.
+- **YouTube and PDF brittleness.** Fall back to cloud: YouTube URLs as `fileData` and PDFs as `inlineData`. Label the fallback reason on the card.
+- **The `.apkg` format eats time.** TSV is the guaranteed export. `.apkg` is timeboxed to 30 minutes using the minimal Anki 2.1 legacy schema, and is cut if the test fails.
+- **Remote Config and Auth in MV3.** Use `setDefaults` and a short fetch timeout, and fall back to defaults silently. Use `firebase/auth/web-extension` for anonymous auth. Sync stays behind a flag.
+
+I checked the plan against `BRIEF.md` and the `InferenceMode`, `HybridParams`, `inferenceSource` and `initializeDeviceModel` types in `ai-public.d.ts`. Two points come from my own knowledge, not the research folder, and should be confirmed in M2: that the SDK's public `getGenerativeModel` has no way to inject an adapter, and that `firebase/auth/web-extension` exists in 13.4.0. Because of the first, the mock lives in our own provider layer. `research/cfg.txt` is a saved 404 page, so it added nothing.

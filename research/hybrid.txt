@@ -1,0 +1,808 @@
+
+      Build hybrid experiences in Web apps with on-device and cloud-hosted models  |  Firebase AI Logic
+      Skip to main content
+    Build
+                Build
+                Get to market quickly and securely with products that can scale globally
+                      Go to Build
+                Build Products
+                      App Check
+                      App Hosting
+                      Authentication
+                      Cloud Functions
+                      Cloud Storage
+                      SQL Connect
+                      Extensions
+                      Firestore
+                      Hosting
+                      Phone Number Verification
+                      Realtime Database
+                      Firebase AI Logic
+                      Generative AI
+    Run
+                Run
+                Run your app with confidence and deliver the best experience for your users
+                      Go to Run
+                Run Products
+                      A/B Testing
+                      App Distribution
+                      Cloud Messaging
+                      Crashlytics
+                      Google Analytics
+                      In-App Messaging
+                      Performance Monitoring
+                      Remote Config
+                      Test Lab
+    Solutions
+    Pricing
+    Docs
+                      Overview
+                      Fundamentals
+                      AI
+                      Build
+                      Run
+                      Reference
+                      Samples
+    Community
+                      Learn
+                      Stories
+    Support
+            /
+      English
+      Deutsch
+      Español – América Latina
+      Français
+      Indonesia
+      Italiano
+      Polski
+      Português – Brasil
+      Tiếng Việt
+      Türkçe
+      Русский
+      עברית
+      العربيّة
+      فارسی
+      हिंदी
+      বাংলা
+      ภาษาไทย
+      中文 – 简体
+      中文 – 繁體
+      日本語
+      한국어
+  Blog
+  Go to console
+              Sign in
+          Documentation
+          Firebase AI Logic
+    Overview
+    Fundamentals
+                      Add Firebase - Apple platforms (iOS+)
+                      Add Firebase - Android
+                      Add Firebase - Web
+                      Add Firebase - Flutter
+                      Add Firebase - C++
+                      Add Firebase - Unity
+                      Add Firebase - Server environments
+                      Manage Firebase projects
+                      Supported platforms & frameworks
+    AI
+                Develop with AI assistance
+                      Overview
+                      Gemini in Firebase
+                      Streamline development with an AI-powered assistant in Firebase interfaces and tools.
+                      AI tools, skills, & MCP
+                      Access agentive development tools, like our agent skills and MCP server.
+                      Firebase Studio (deprecated)
+                      Build and ship full-stack AI-infused apps right from your browser.
+                Build AI-powered apps
+                      Firebase AI Logic
+                      Build genAI features and securely access Gemini models directly from your mobile & web apps.
+    Build
+                Security
+                      Authentication
+                      Simplify user authentication and sign-in on a secure, all-in-one identity platform.
+                      Phone Number Verification
+                      Obtain the phone number of a device directly from the carrier, without SMS.
+                      App Check
+                      Protect your backend resources from abuse and unauthorized access.
+                      Security Rules
+                      Define granular, server-enforced rules to protect your database and storage data.
+                Databases & Storage
+                      SQL Connect
+                      Build and scale your apps using a fully-managed PostgreSQL relational database service.
+                      Cloud Firestore
+                      Store and sync data using a scalable NoSQL cloud database with rich data models and queryability.
+                      Realtime Database
+                      Store and sync data in realtime with a NoSQL cloud database.
+                      Storage
+                      Store and serve content like images, audio, video with a secure cloud-hosted solution.
+                Hosting & Serverless
+                      App Hosting
+                      Deploy your modern, full-stack web apps with server-side rendering and AI features.
+                      Hosting
+                      Deploy your static and single-page web apps to a global CDN with a single command.
+                      Cloud Functions
+                      Run backend code in response to events without provisioning or managing a server.
+                      Extensions (deprecated)
+                      Deploy pre-built integrations and solutions for common tasks.
+                Tools
+                      Emulator Suite
+                      Test your app in real-world conditions without affecting live data.
+    Run
+                Release & Monitor
+                      App Distribution
+                      Streamline delivery of pre-release Android and iOS apps to trusted testers.
+                      Crashlytics
+                      Track, prioritize, and fix app stability issues.
+                      Performance Monitoring
+                      Gain real-time insight into your app's performance and fix issues.
+                      Test Lab (deprecated)
+                      Test your Android and iOS apps on a wide range of real and virtual devices, all in the cloud.
+                Iterate & Measure
+                      Remote Config
+                      Instantly change your app's behavior and appearance, without publishing an update.
+                      A/B Testing
+                      Test variants to make data-driven decisions about changes, features, and campaigns.
+                      Google Analytics
+                      Gain insights into user behavior, and optimize your app's marketing and performance.
+                Engage Users
+                      Cloud Messaging
+                      Send notifications and messages to your users on Android, iOS, and the Web.
+                      In-App Messaging
+                      Engage your active users with targeted, contextual messages within your app.
+                      Google AdMob
+                      Monetize your app, gain user insights, and tailor the ad experience.
+                      Google Ads
+                      Run smarter campaigns, find high-value users, and measure in-app conversions.
+    Reference
+    Samples
+      Build
+      More
+      Run
+      More
+      Solutions
+      Pricing
+      Docs
+      More
+      Overview
+      Fundamentals
+      More
+      AI
+      More
+      Build
+      More
+      Run
+      More
+      Reference
+      Samples
+      Community
+      More
+      Support
+      Blog
+      Go to console
+            Overview
+        Develop with AI assistance
+  Develop with AI assistance
+        Gemini in Firebase
+      IntroductionSet up Gemini in FirebaseTry Gemini in the Firebase console
+        AI tools and integrations
+      Firebase agent skillsFirebase MCP serverIntegrate Firebase services using AI assistanceGoogle AI Studio integration
+        Prompts
+      OverviewSet up a backendWrite security rulesAdd AI featuresDeploy to hostingPrioritize & fix issues
+        Firebase Studio
+      Firebase Studio sunset and project migrationIntroductionGet startedGet started with an existing projectGet started with the App Prototyping agentGet started with a templateFirebase Studio pricing, quotas, and limits
+        AI assistance in Firebase Studio
+      IntroductionGet assistance from GeminiConfigure Gemini assistanceEffective promptingConnect to MCP servers
+        Preview, publish, and monitor
+      Preview web and Android appsPublish appsMonitor and protect web appsUpload your app to GitHub
+        Optimize your Firebase Studio workspace
+      About Firebase Studio workspacesCustomize your Firebase Studio workspaceConnect to a Firebase projectIntegrate with Google and Firebase servicesCreate custom templatesCreate a shortcut to a predefined workspaceShare your workspaceCreate a button to import code into Firebase Studio
+        Solutions
+      Develop, publish, and monitor a full-stack web appBuild an app with the Gemini API
+        Troubleshoot and debug
+      Debug your appFAQ and troubleshooting
+        Reference
+      dev.nix ReferenceProject IDX is now part of Firebase StudioLicensed softwareConnect with us
+        Build AI-powered apps
+        Firebase AI Logic
+      IntroductionGet startedModelsSDK reference docs
+        Security
+      Security checklistPrevent abuse with App Check
+        Core capabilities
+      TextChat
+        Images
+      Analyze imagesGenerate & edit images (Nano Banana)Migrate from Imagen to Gemini
+        Video
+      Analyze video
+        Audio
+      Analyze audioGenerate audioGenerate speech (TTS)
+        Documents (PDFs)
+      Analyze documents (PDFs)Structured output (JSON)Streaming responses
+        Specialized capabilities
+        Hybrid & on-device inference
+      Overview
+        iOS+
+      Get startedConfiguration options
+        Android
+      Get startedConfiguration optionsStructured output (JSON)
+        Web
+      Get startedConfiguration optionsStructured output (JSON)
+        Real-time bidirectional streaming (Live API)
+      Get startedCapabilitiesConfiguration optionsManage sessionsLimits & specifications
+        Provide tools to the model
+      Function callingCode executionURL contextGrounding - Google SearchGrounding - Google Maps
+        Control generation of responses
+      Overview of optionsPrompt designModel configurationThinkingSafety settingsSystem instructions
+        Get ready for production
+      Production checklistRestrict requests to authenticated usersChange model name remotelyLocationsContext cachingPricingRate limits & quotaCount tokensMonitor costs, usage, & metrics
+        Solutions
+      OverviewInclude large files in requests with Cloud Storage
+        Store & access prompt templates on the server
+      Get startedMulti-turn interactionsFormat, syntax, & examplesBest practices & considerationsManage templatesVersion with Remote ConfigTemplate-only modeAdvanced workflowsDynamically update your app with Remote ConfigRun server-side scripts before & after requests
+        Access Gemini API via Apple's Foundation Models framework
+      Get startedCapabilitiesConfig optionsProvide tools
+        Additional information
+      Input file types & requirements
+        Migration guides
+      Migrate from GA "Vertex AI in Firebase"Migrate from preview "Vertex AI in Firebase"Migrate from "Google AI client SDKs"Data governance & Responsible AICloud Audit LoggingFAQ and troubleshootingError codesGive feedback
+      Build
+      Go to Build
+      Build Products
+      App Check
+      App Hosting
+      Authentication
+      Cloud Functions
+      Cloud Storage
+      SQL Connect
+      Extensions
+      Firestore
+      Hosting
+      Phone Number Verification
+      Realtime Database
+      Firebase AI Logic
+      Generative AI
+      Run
+      Go to Run
+      Run Products
+      A/B Testing
+      App Distribution
+      Cloud Messaging
+      Crashlytics
+      Google Analytics
+      In-App Messaging
+      Performance Monitoring
+      Remote Config
+      Test Lab
+      Overview
+      Fundamentals
+      AI
+      Build
+      Run
+      Reference
+      Samples
+      Learn
+      Stories
+      Add Firebase - Apple platforms (iOS+)
+      Add Firebase - Android
+      Add Firebase - Web
+      Add Firebase - Flutter
+      Add Firebase - C++
+      Add Firebase - Unity
+      Add Firebase - Server environments
+      Manage Firebase projects
+      Supported platforms & frameworks
+      Develop with AI assistance
+      Overview
+      Gemini in Firebase
+      AI tools, skills, & MCP
+      Firebase Studio (deprecated)
+      Build AI-powered apps
+      Firebase AI Logic
+      Security
+      Authentication
+      Phone Number Verification
+      App Check
+      Security Rules
+      Databases & Storage
+      SQL Connect
+      Cloud Firestore
+      Realtime Database
+      Storage
+      Hosting & Serverless
+      App Hosting
+      Hosting
+      Cloud Functions
+      Extensions (deprecated)
+      Tools
+      Emulator Suite
+      Release & Monitor
+      App Distribution
+      Crashlytics
+      Performance Monitoring
+      Test Lab (deprecated)
+      Iterate & Measure
+      Remote Config
+      A/B Testing
+      Google Analytics
+      Engage Users
+      Cloud Messaging
+      In-App Messaging
+      Google AdMob
+      Google Ads
+          On November 2, 2026, Firebase automatically enforced App Check for Firebase AI Logic in all projects. Learn more.  Model updates: 
+    Gemini 4 Hydrogen is now
+    available to use with Firebase AI Logic!
+    Learn more.
+    Gemini 2.5 models are deprecated or shut down. For the
+    Agent Platform Gemini API, all general-use Gemini 2.5 models
+    have shut down. For the Gemini Developer API, starting
+    December 1, 2026, requests to the general-use
+    Gemini 2.5 Flash and Pro models will be automatically routed to newer
+    models (which may cause breaking changes;
+    learn more).
+    To avoid service disruptions, update to a newer model (like
+    gemini-4-hydrogen,
+    gemini-3.8-flash,
+    gemini-3.5-flash-lite, or
+    gemini-nano-banana-2.1).
+    Learn more.
+          Firebase
+          Documentation
+          Firebase AI Logic
+          AI
+    Send feedback
+      Build hybrid experiences in Web apps with on-device and cloud-hosted models
+      Stay organized with collections
+      Save and categorize content based on your preferences.
+You can build AI-powered Web apps and features with hybrid inference using
+Firebase AI Logic. Hybrid inference enables running inference using
+on-device models when available and seamlessly falling back to cloud-hosted
+models otherwise (and vice versa).
+This page describes how to
+get started using the client SDK. After completing this standard
+setup, check out the
+additional configuration options and capabilities.
+Note that on-device inference via Firebase AI Logic is supported for
+web apps using Firebase AI Logic SDK v12.5.0+ and running on
+Chrome on Desktop (version 139 or higher).
+arrow_downward Jump to view code examples 
+Use cases and supported capabilities
+Depending on your app's use cases, you can take advantage of several benefits
+of on-device or hybrid experiences:
+Benefits of using an on-device model for inference:
+Enhanced privacy
+Local context
+Inference at no-cost
+Offline functionality
+Benefits of using a hybrid approach:
+Provide a similar app experience, regardless of the end-user's device
+Improve availability of generative AI features, regardless of internet
+connectivity, quota limitations, or device capabilities
+Supported on-device inference capabilities
+On-device inference only supports single-turn text generation (not chat)
+(with streaming or non-streaming output), specifically the following
+capabilities:
+Generating text from text-only input.
+Generating text from text-and-image input, specifically
+input image types of JPEG and PNG.
+Generating structured output,
+including JSON and enums.
+Make sure to review the list of
+not-yet-supported features for hybrid or on-device inference
+at the bottom of this page.
+Supported APIs and platforms
+The following sections describe the supported APIs, as well as the supported
+platforms and browsers.
+Supported APIs for in-cloud vs on-device inference
+In-cloud inference uses your chosen Gemini API provider (either the
+Gemini Developer API or the Agent Platform Gemini API (formerly Vertex AI)).
+On-device inference uses the
+Prompt API from Chrome.
+Supported platforms and browsers
+For on-device inference (which uses the Prompt API from Chrome), the end-user
+of your app must be running Chrome on Desktop (version 139 or higher).
+Learn more in the
+Chrome documentation.
+Get started on localhost
+These get started steps describe the required general setup for any supported
+prompt request that you want to send.
+You can learn more about
+using APIs on localhost 
+in the Chrome documentation.
+Step 1: Set up Chrome and the Prompt API for on-device inference
+Make sure you're using a recent version of Chrome. Update in
+chrome://settings/help.
+On-device inference is available from Chrome v139 and higher.
+Enable the on-device multimodal model by setting the following flag to
+Enabled:
+chrome://flags/#prompt-api-for-gemini-nano-multimodal-input
+Restart Chrome.
+(Optional) Download the on-device model before the first request.
+The Prompt API is built into Chrome; however, the on-device model isn't
+available by default. If you haven't yet downloaded the model before your
+first request for on-device inference, the request will automatically start
+the model download in the background.
+Note: Downloading the model can take several minutes, so waiting to
+auto-download with the first request can significantly delay receiving a
+response to that request.
+View instructions to download the on-device model
+Open Developer Tools > Console.
+Run the following:
+await LanguageModel.availability();
+Make sure that the output is available, downloading, or
+downloadable.
+If the output is downloadable, start the model download by running:
+await LanguageModel.create();
+You can use the following monitor callback to listen for download
+progress and make sure that the model is available before making
+requests:
+const session = await LanguageModel.create({
+  monitor(m) {
+    m.addEventListener("downloadprogress", (e) => {
+      console.log(`Downloaded ${e.loaded * 100}%`);
+    });
+  },
+});
+Step 2: Set up a Firebase project and connect your app to Firebase
+Sign into the Firebase console,
+and then select your Firebase project.
+  Don't already have a Firebase project?
+If you don't already have a Firebase project, click the button to create a
+new Firebase project, and then use either of the following options:
+Option 1: Create a wholly new Firebase project (and its underlying
+Google Cloud project automatically) by entering a new project name in the
+first step of the workflow.
+Option 2: "Add Firebase" to an existing Google Cloud project by
+clicking Add Firebase to Google Cloud project (at bottom of page).
+In the first step of the workflow, start entering the project name of
+the existing project, and then select the project from the displayed list.
+Complete the remaining steps of the on-screen workflow to create a Firebase
+project. Note that when prompted, you do not need to set up
+Google Analytics to use the Firebase AI Logic SDKs.
+In the Firebase console, go to AI Services >
+AI Logic.
+Click Get started to launch a guided workflow that helps you set up the
+required APIs
+and resources for your project.
+If prompted, follow the on-screen instructions to register your app and add
+your Firebase configuration to your app.
+When asked to choose a "Gemini API provider", we recommend selecting the
+Gemini Developer API, which lets you get started quickly at no cost.
+At any point later, you can always
+set up the Agent Platform Gemini API (formerly Vertex AI)
+(and its requirement for billing).
+Continue in the workflow to set up the required APIs and associated services
+for Firebase AI Logic.
+This stage of the workflow automatically
+enforces Firebase App Check for AI Logic,
+which is a critical service to help protect the Gemini API when it's
+directly accessed from your app. As part of getting started (see steps later
+in this guide), you'll need to configure the App Check debug provider
+for local development when App Check is enforced.
+Note: To release your app's AI feature to end users, you need to
+register your app with a production App Check attestation provider
+so that they can use the feature when App Check is enforced.
+Continue to the next step in this guide to add the required SDKs to your
+app.
+Step 3: Add the SDK
+The Firebase library provides access to the APIs for interacting with generative
+models. The library is included as part of the Firebase JavaScript SDK for Web.
+Install the Firebase JS SDK for Web using npm:
+npm install firebase
+Initialize Firebase in your app:
+import { initializeApp } from "firebase/app";
+import { initializeAppCheck } from "firebase/app-check";
+// TODO(developer) Replace the following with your app's Firebase configuration
+// See: https://firebase.google.com/docs/web/learn-more#config-object
+const firebaseConfig = {
+  // ...
+};
+// Initialize FirebaseApp
+const firebaseApp = initializeApp(firebaseConfig);
+Step 4: Configure the App Check debug provider for local development
+As part of the guided setup workflow for AI Logic in the console, Firebase App Check is automatically enforced to protect the Gemini API.
+For local development, you need to configure the
+App Check debug provider to bypass attestation while still maintaining the
+enforcement of App Check.
+Important: Make sure that App Check is enforced for AI Logic.
+In the Firebase console, go to the Security > App Check >
+APIs tab,
+and then find the row for Firebase AI Logic. If it says Unenforced, then
+follow the
+instructions to enforce App Check yourself.
+Here's how to use the debug provider while running your app from localhost
+interactively (for example, during local development):
+Warning: Do not try to enable localhost debugging by adding
+localhost to the allowed domains for reCAPTCHA. Doing so would allow
+anyone to run your app from their local machines!
+In your debug build, enable debug mode by setting
+self.FIREBASE_APPCHECK_DEBUG_TOKEN to true before you initialize
+App Check. For example:
+self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+initializeAppCheck(firebaseApp, { /* App Check options */ });
+Visit your web app locally and open the browser's developer tools. In the
+debug console, you'll see a debug token:
+AppCheck debug token: "123a4567-b89c-12d3-e456-789012345678".
+You will need to safelist it in the Firebase console for it to work.
+Register your debug token with App Check:
+In the Firebase console, go to the
+Security > App Check >
+Apps tab.
+Find your app, click the overflow menu
+(more_vert), and then select
+Manage debug tokens.
+Follow the on-screen instructions to register your debug token.
+For details about the debug provider (including how to get a new debug token),
+check out the
+official App Check docs.
+Here are some critical points about the
+  App Check debug provider:
+      Keep your debug token and debug build private. Don't
+      commit your debug token to a public repository, and don't ship your debug
+      token or debug build in production builds of your app.
+      Register your app with a production attestation provider before
+      releasing to end users.
+      You'll need to
+      register your app with a production App Check attestation provider
+      (for example, Play Integrity)
+      so that your end-users can use your feature with App Check enforced.
+Step 5: Initialize the service and create a model instance
+      Click your Gemini API provider to view provider-specific content
+        and code on this page.
+        Gemini Developer API
+        Agent Platform Gemini API
+Set up the following before you send a prompt request to the model:
+Initialize the service for your chosen API provider.
+Create a GenerativeModel instance. Make sure to set the mode to one of:
+PREFER_ON_DEVICE: Use the on-device model if it's available;
+otherwise, fall back to the cloud-hosted model.
+ONLY_ON_DEVICE: Use the on-device model if it's available;
+otherwise, throw an exception.
+PREFER_IN_CLOUD: Use the cloud-hosted model if it's available;
+otherwise, fall back to the on-device model.
+ONLY_IN_CLOUD: Use the cloud-hosted model if it's available;
+otherwise, throw an exception.
+import { initializeApp } from "firebase/app";
+import { getAI, getGenerativeModel, GoogleAIBackend, InferenceMode } from "firebase/ai";
+// TODO(developer) Replace the following with your app's Firebase configuration
+// See: https://firebase.google.com/docs/web/learn-more#config-object
+const firebaseConfig = {
+  // ...
+};
+// Initialize FirebaseApp
+const firebaseApp = initializeApp(firebaseConfig);
+// Initialize the Gemini Developer API backend service
+const ai = getAI(firebaseApp, { backend: new GoogleAIBackend() });
+// Create a `GenerativeModel` instance
+// Set the mode (for example, use the on-device model if it's available)
+const model = getGenerativeModel(ai, { mode: InferenceMode.PREFER_ON_DEVICE });
+Note: Keep the following in mind:
+      Before implementing hybrid or on-device inference, make sure to review the
+      list of not-yet-supported features.
+      The default cloud-hosted model is
+      gemini-3.5-flash-lite, but you can
+      override the default.
+      As part of the response, the SDK tells you
+      whether on-device or in-cloud inference was used.
+Step 6: Initialize the on-device model
+You must call initializeDeviceModel() after or on an end-user page
+interaction (like a button click) and before you send a prompt request to the
+model. Learn more about the
+user activation requirement 
+in the Chrome documentation.
+import { initializeApp } from "firebase/app";
+import { getAI, getGenerativeModel, GoogleAIBackend, InferenceMode } from "firebase/ai";
+// TODO(developer) Replace the following with your app's Firebase configuration
+// See: https://firebase.google.com/docs/web/learn-more#config-object
+const firebaseConfig = {
+  // ...
+};
+// Initialize FirebaseApp
+const firebaseApp = initializeApp(firebaseConfig);
+// Initialize the Gemini Developer API backend service
+const ai = getAI(firebaseApp, { backend: new GoogleAIBackend() });
+// Create a `GenerativeModel` instance
+// Set the mode (for example, use the on-device model if it's available)
+const model = getGenerativeModel(ai, { mode: InferenceMode.PREFER_ON_DEVICE });
+// `initializeDeviceModel` must be called:
+// (1) after or on an end-user page interaction such as a button click
+// and
+// (2) before any queries to the model (such as `generateContent()`)
+// You may want to `await` this promise if using `ONLY_ON_DEVICE` (see note below).
+model.initializeDeviceModel((val) =>
+  // Example: "Download progress: 72.62%""
+  console.log(`Download progress: ${Math.round(val*10000) / 100}%`)
+);
+  Downloading the on-device model can take several minutes.
+    If you haven't yet
+    downloaded the model
+      before your first request for on-device inference,
+    calling initializeDeviceModel() will automatically start the
+    model download in the background. Waiting for
+    initializeDeviceModel() to complete ensures the model is ready
+    for immediate queries but may take several minutes.
+    Calling methods like generateContent() before the download is
+    complete will have different results based on the mode:
+      ONLY_ON_DEVICE: the request will wait until the download is
+      complete, and then send the prompt to the on-device model and return the
+      result. This may take several minutes.
+      PREFER_IN_CLOUD or PREFER_ON_DEVICE: the request
+      will not wait for the download to complete and will automatically
+      fall back to use the cloud-hosted model.
+    ONLY_IN_CLOUD: the request will automatically
+      fall back to use the cloud-hosted model.
+Step 7: Send a prompt request to a model
+This section shows you how to send various types of input to generate different
+types of output, including:
+Generate text from text-only input
+Generate text from text-and-image (multimodal) input
+If you want to generate structured output (like JSON or enums), then
+use one of the following "generate text" examples and additionally
+configure the model to respond according to a provided schema.
+Generate text from text-only input
+      Before trying this sample, make sure that you've completed the
+      Get started section of this guide.
+You can use
+generateContent()
+to generate text from a prompt that contains text:
+// Imports + initialization of FirebaseApp and backend service + creation of model instance
+// Wrap in an async function so you can use await
+async function run() {
+  // Provide a prompt that contains text
+  const prompt = "Write a story about a magic backpack."
+  // To generate text output, call `generateContent` with the text input
+  const result = await model.generateContent(prompt);
+  const response = result.response;
+  const text = response.text();
+  console.log(text);
+}
+run();
+Note that Firebase AI Logic also supports streaming of text responses using
+generateContentStream
+(instead of generateContent).
+Generate text from text-and-image (multimodal) input
+      Before trying this sample, make sure that you've completed the
+      Get started section of this guide.
+You can use
+generateContent()
+to generate text from a prompt that contains text and image files—providing each
+input file's mimeType and the file itself.
+The supported input image types for on-device inference are PNG and JPEG.
+Important: For on-device inference, the maximum token limit is 9216 tokens.// Imports + initialization of FirebaseApp and backend service + creation of model instance
+// Converts a File object to a Part object.
+async function fileToGenerativePart(file) {
+  const base64EncodedDataPromise = new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+    reader.readAsDataURL(file);
+  });
+  return {
+    type: "inlineData",
+    inlineData: { data: await base64EncodedDataPromise, mimeType: file.type },
+  };
+}
+async function run() {
+  // Provide a text prompt to include with the image
+  const prompt = "Write a poem about this picture:";
+  const fileInputEl = document.querySelector("input[type=file]");
+  const imagePart = await fileToGenerativePart(fileInputEl.files[0]);
+  // To generate text output, call `generateContent` with the text and image
+  const result = await model.generateContent([prompt, imagePart]);
+  const response = result.response;
+  const text = response.text();
+  console.log(text);
+}
+run();
+Note that Firebase AI Logic also supports streaming of text responses using
+generateContentStream
+(instead of generateContent).
+What else can you do?
+You can use various additional configuration options and capabilities for your
+hybrid experiences:
+Set an inference mode.
+Determine whether on-device or in-cloud inference was used.
+Override the default cloud-hosted fallback model.
+Use model configuration to control responses.
+Generate structured output (like JSON and enums).
+Features not yet supported
+Not all the capabilities of the Web SDK or cloud-hosted models are available for
+hybrid or on-device inference.
+Features not yet supported for hybrid implementations
+The following features cannot be used with hybrid implementations (neither
+on-device nor via cloud fallback):
+Gemini Live API: Bi-directional real-time streaming is not supported.
+Server prompt templates: Managed server prompt templates are not supported.
+Count tokens: Count tokens shouldn't be relied upon because the count will
+differ between cloud-hosted and on-device models, so there's no intuitive
+fallback.
+Features not yet supported for on-device inference
+The following features are not yet supported for on-device inference, but
+they are available for cloud-hosted models.
+Note: For many of these not-yet-supported features, if you set the mode to
+PREFER_ON_DEVICE, the SDK will automatically fall back to use the cloud-hosted
+model. However, to provide a more consistent experience for your users, consider
+directly using a cloud-hosted model.
+Generating images using Gemini Nano Banana models
+Can fall back to the cloud-hosted model;
+however, ONLY_ON_DEVICE mode will throw an error.
+Generating text from image file input types other than JPEG and PNG
+Can fall back to the cloud-hosted model;
+however, ONLY_ON_DEVICE mode will throw an error.
+Generating text from multimodal inputs of audio, video, and
+documents (PDFs)
+Can fall back to the cloud-hosted model;
+however, ONLY_ON_DEVICE mode will throw an error.
+Providing files using URLs in multimodal requests. You must provide files as
+inline data to on-device models.
+Multi-turn chat
+Can fall back to the cloud-hosted model;
+however, ONLY_ON_DEVICE mode will throw an error.
+Providing the model with tools to help it generate its response
+(like function calling, code execution, URL context,
+Grounding with Google Search, and Grounding with Google Maps)
+AI monitoring in the Firebase console does not show any data for
+on-device inference (including on-device logs). However, any inference that
+uses a cloud-hosted model can be monitored just like other inference via
+Firebase AI Logic.
+Additional limitations
+In addition to the above, on-device inference has the following
+limitations:
+The end-user of your app must be running Chrome on Desktop (version 139 or
+higher) with the required flags enabled.
+The on-device model requires sufficient storage space on the user's device for
+the initial model download.
+Give feedback
+  about your experience with Firebase AI Logic
+    Send feedback
+  Except as otherwise noted, the content of this page is licensed under the Creative Commons Attribution 4.0 License, and code samples are licensed under the Apache 2.0 License. For details, see the Google Developers Site Policies. Java is a registered trademark of Oracle and/or its affiliates.
+  Last updated 2026-11-18 UTC.
+    Need to tell us more?
+      [[["Easy to understand","easyToUnderstand","thumb-up"],["Solved my problem","solvedMyProblem","thumb-up"],["Other","otherUp","thumb-up"]],[["Missing the information I need","missingTheInformationINeed","thumb-down"],["Too complicated / too many steps","tooComplicatedTooManySteps","thumb-down"],["Out of date","outOfDate","thumb-down"],["Samples / code issue","samplesCodeIssue","thumb-down"],["Other","otherDown","thumb-down"]],["Last updated 2026-11-18 UTC."],[],[]]
+    Learn
+            Developer guides
+            SDK & API reference
+            Samples
+            Libraries
+            GitHub
+    Stay connected
+            Check out the blog
+            Find us on Reddit
+            Follow on X
+            Subscribe on YouTube
+            Attend an event
+    Support
+            Contact support
+            Stack Overflow
+            Google group
+            Release notes
+            Brand guidelines
+            FAQs
+          Android
+          Chrome
+          Firebase
+          Google Cloud Platform
+          All products
+          Terms
+          Privacy
+          Manage cookies
+      English
+      Deutsch
+      Español – América Latina
+      Français
+      Indonesia
+      Italiano
+      Polski
+      Português – Brasil
+      Tiếng Việt
+      Türkçe
+      Русский
+      עברית
+      العربيّة
+      فارسی
+      हिंदी
+      বাংলা
+      ภาษาไทย
+      中文 – 简体
+      中文 – 繁體
+      日本語
+      한국어

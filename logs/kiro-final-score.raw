@@ -1,0 +1,22 @@
+[tool] Reading BRIEF.md:1, devpost-story.md:1, submission-checklist.md:1, m10.last.md:1
+[tool] status: Completed
+**1. Scores (1-5)**
+
+- **Technological Implementation: 5.** The router picks one of the four `InferenceMode`s per request, badges come from the returned `inferenceSource`, Nano does sensitivity classification and grading, and a post-build check confirms the SDK calls are in the bundle.
+- **Design: 4.** The full loop works (capture → edit → review → Anki export), and routing is explained on each card. It drops from 5 because every test ran in Demo mode or with Nano stubbed, so the live UX hasn't been seen.
+- **Potential Impact: 4.** The medical student with patient notes is a believable user. Offline and private grading are real benefits, but the audience is mostly students.
+- **Quality of the Idea: 4.** AI flashcard tools are common. Using Nano to decide what may go to the cloud, and grading answers privately, are less obvious.
+
+**2. Stage One risk**
+
+- The demo video doesn't exist yet. Without it the entry can fail the baseline check.
+- Firebase AI Logic has never run against a real project. If App Check, the model names or `inferenceSource` misbehave live, the "actually called at runtime" requirement is at risk.
+- Early `master` history contains Google's public page keys. Pushing the wrong branch exposes them.
+- Judges who load the ZIP without a Firebase config will see Demo mode. The testing instructions must say this clearly.
+- I took "all six commands passed" from `logs/m10.last.md` and did not rerun them.
+
+**3. Do before submitting**
+
+1. Set up a real Firebase project and register the App Check debug token. Then run **Options → Diagnostics → Run live hybrid test** and confirm both `on_device` and `in_cloud` come back.
+2. Record the video of at most 3 minutes on real Chrome with Nano, showing both routes. Upload it to YouTube as Public.
+3. Push only the squashed `public` branch and confirm `git grep -nE "AIza[0-9A-Za-z_-]{30,}"` prints nothing. Then attach the ZIP in a GitHub Release and submit before Dec 1, 07:00 KST.

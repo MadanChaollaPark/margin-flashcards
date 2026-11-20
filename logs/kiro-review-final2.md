@@ -1,0 +1,18 @@
+**A. Claims that don't match the code**
+
+1. **Story:** "If Nano isn't available to confirm, Margin asks you before sending anything." In `runtime.ts`, the cloud prompt (`confirm`) only appears when the pattern check fires. Text with no pattern hit goes to the cloud without a prompt. **Fix:** "If the pattern check flags text and Nano can't confirm, Margin asks first."
+2. **Story:** "Before captured text can go to the cloud, it passes … a Gemini Nano structured-output classification." `classify()` only runs when Nano is `available` and `sensitivityCheck` is on. It is skipped after you approve a cloud send, and image-only captures are never classified. **Fix:** add "when Nano is ready", and say images skip the check.
+3. **Story:** "We read `response.inferenceSource`, so every badge reports what actually ran." In `review.ts`, `showFeedback` always shows the text "Graded on-device", even in Demo mode. **Fix:** narrow the claim to generation badges, or fix B2.
+4. **Story:** "They retry with backoff while Margin is open." Only the side panel retries on its own (`startQueueDrain`). In Options, retry is manual. **Fix:** "while the side panel is open."
+
+**B. Bugs and UX gaps visible in a demo (about 20 minutes)**
+
+1. **`sidepanel.ts`, `runCapture`:** If you decline the cloud dialog, `if (!result) return;` ends the capture with no feedback. **Fix:** before returning, call `notify("Kept on this device. Nothing was sent.")`.
+2. **`review.ts`, `showFeedback`:** The badge says "Graded on-device" even for simulated grades. **Fix:** `route.textContent = simulated ? "Simulated · on-device" : "Graded on-device";`. Ideally, have `checkAnswer` return its `source` and use that.
+3. **`review.ts`, `start`:** In Live mode without Nano, **Check** stays enabled and then shows an error toast. **Fix:** call `(await createRuntime()).provider.status()`. If it isn't `available` and the build isn't mock, hide **Check** and set the input placeholder to "On-device grading unavailable. Reveal and rate yourself."
+4. **`sidepanel.ts`:** The side panel has no `online`/`offline` listeners, so the status badge doesn't change during the offline demo, which is the strongest hybrid moment. **Fix:** add `window.addEventListener("offline"/"online", …)`. Set the status text to "Offline · on-device only" and call `refreshQueue()`. When back online, also call `retryQueue?.()`.
+5. **`runtime.ts` and `sidepanel.ts`:** Sensitivity classification of long text runs chunk by chunk under a plain "Generating…" label, so the gatekeeper step can't be seen. **Fix:** add an `onStage?: (s: string) => void` option to `generateCards`. Call `onStage("Checking privacy on-device…")` before `classify`, then `onStage(decision.mode === ONLY_ON_DEVICE ? "Generating on-device…" : "Generating…")`. In the side panel, pass `(s) => generate.textContent = s`.
+
+One smaller fix in `sidepanel.ts`: in the `welcome-try` handler, `generate.focus()` runs before `expandCapture(true)`, so focus is lost. Swap the order.
+
+I didn't read `grade.ts`. Check there that grading uses `ONLY_ON_DEVICE`, because `checkAnswer` receives `config.cloudModel`.

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Options · Margin</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="options.js"></script>
+</head>
+<body>
+  <main class="settings">
+    <header>
+      <div class="brand"><img src="icon.svg" alt=""><span>Margin</span></div>
+      <nav aria-label="Margin pages"><a href="library.html">Cards</a><a href="review.html" target="_blank">Review</a></nav>
+    </header>
+    <p id="demo-banner" class="demo-banner" hidden>DEMO MODE (simulated AI)</p>
+    <p id="toast" class="toast" role="status" aria-live="polite"></p>
+    <h1 class="page-heading">Options</h1>
+    <div class="settings-grid">
+      <div class="stack settings-column">
+        <section class="surface stack" aria-labelledby="privacy-heading">
+          <h2 id="privacy-heading">Privacy &amp; AI</h2>
+          <label class="privacy-switch">
+            <span><strong>Privacy mode</strong><span class="hint" id="privacy-hint">No source content leaves your machine. When Firebase is configured and Demo mode is off, Margin still fetches routing settings from Firebase Remote Config.</span></span>
+            <input id="privacy-mode" type="checkbox" role="switch" aria-label="Privacy mode" aria-describedby="privacy-hint">
+          </label>
+          <div>
+            <label for="inference-mode">Inference mode</label>
+            <select id="inference-mode"></select>
+          </div>
+          <label class="toggle"><input id="demo-mode" type="checkbox"><span>Demo mode</span></label>
+          <form id="debug-form">
+            <label for="debug-token">App Check debug token</label>
+            <div class="row">
+              <input id="debug-token" type="password" autocomplete="off" spellcheck="false">
+              <button class="secondary" type="submit">Save token</button>
+            </div>
+          </form>
+        </section>
+        <section class="surface stack" aria-labelledby="backup-heading">
+          <h2 id="backup-heading">Firestore backup</h2>
+          <label class="toggle">
+            <input id="firestore-backup" type="checkbox" role="switch" aria-describedby="backup-hint" disabled>
+            <span>Back up decks to Firestore <span class="hint">(off by default)</span></span>
+          </label>
+          <p class="hint" id="backup-hint"></p>
+          <div class="actions">
+            <button class="secondary" id="back-up-now" type="button" disabled>Back up now</button>
+            <button class="secondary" id="restore-backup" type="button" disabled>Restore from backup</button>
+          </div>
+          <p id="backup-result" class="hint" aria-live="polite"></p>
+        </section>
+
+        <section class="surface stack routing-card" aria-labelledby="routing-heading">
+          <div class="row section-heading">
+            <h2 id="routing-heading">AI routing</h2>
+            <span class="badge neutral" id="active-routing"></span>
+          </div>
+          <ul id="routing-rules" class="routing-rules"></ul>
+          <details>
+            <summary>Remote Config values</summary>
+            <dl id="remote-config" class="definition-list"></dl>
+          </details>
+        </section>
+      </div>
+
+      <div class="stack settings-column">
+        <section class="surface stack" aria-labelledby="stats-heading">
+          <h2 id="stats-heading">On-device activity</h2>
+          <dl class="stats">
+            <div><dt>Cards generated on-device</dt><dd id="on-device-percent">—</dd></div>
+            <div><dt>Source data kept local</dt><dd id="bytes-local">—</dd></div>
+          </dl>
+          <figure class="route-chart">
+            <figcaption>Cards by route</figcaption>
+            <div class="chart-track" aria-hidden="true"><span id="chart-device"></span><span id="chart-cloud"></span></div>
+            <div class="row chart-legend">
+              <span class="badge device" id="count-device"></span>
+              <span class="badge cloud" id="count-cloud"></span>
+            </div>
+          </figure>
+        </section>
+        <section class="surface stack" aria-labelledby="diagnostics-heading">
+          <h2 id="diagnostics-heading">Diagnostics</h2>
+          <dl class="definition-list diagnostics">
+            <div><dt>Chrome version</dt><dd id="diagnostic-chrome">Checking…</dd></div>
+            <div><dt>Prompt API</dt><dd id="diagnostic-prompt">Checking…</dd></div>
+            <div><dt>LanguageModel availability</dt><dd id="diagnostic-nano">Checking…</dd></div>
+            <div><dt>Firebase configuration</dt><dd id="diagnostic-firebase">Checking…</dd></div>
+            <div><dt>App Check limited-use token</dt><dd id="diagnostic-app-check">Checking…</dd></div>
+            <div><dt>Remote Config</dt><dd id="diagnostic-remote-config">Checking…</dd></div>
+            <div><dt>Current mode</dt><dd id="diagnostic-mode">Checking…</dd></div>
+          </dl>
+          <div class="actions">
+            <button class="secondary" id="run-live-test" type="button" aria-describedby="live-test-hint" disabled>Run live hybrid test</button>
+          </div>
+          <p class="hint" id="live-test-hint"></p>
+          <p class="hint" id="live-test-result" aria-live="polite"></p>
+        </section>
+        <section class="surface stack" aria-labelledby="export-heading">
+          <h2 id="export-heading">Export for Anki</h2>
+          <label for="export-deck">Deck to export</label>
+          <select id="export-deck"></select>
+          <div class="actions">
+            <button class="secondary" id="export-tsv" type="button">Export TSV</button>
+            <button id="export-apkg" type="button">Export .apkg</button>
+          </div>
+        </section>
+        <section class="surface stack" aria-labelledby="queue-heading">
+          <h2 id="queue-heading">Offline queue</h2>
+          <p class="hint">Queued jobs retry when Margin is open and you're online. Keep the side panel open for automatic retries.</p>
+          <div id="queue-list" class="stack"></div>
+        </section>
+      </div>
+
+      <section class="surface stack" aria-labelledby="decks-heading">
+        <h2 id="decks-heading">Manage decks</h2>
+        <div id="managed-decks" class="stack"></div>
+      </section>
+    </div>
+    <dialog id="cloud-dialog" aria-labelledby="cloud-heading">
+      <form method="dialog">
+        <h2 id="cloud-heading">Send to cloud anyway?</h2>
+        <p class="hint"></p>
+        <div class="actions">
+          <button value="cancel" class="secondary" autofocus>Cancel</button>
+          <button value="allow">Send to cloud</button>
+        </div>
+      </form>
+    </dialog>
+  </main>
+</body>
+</html>

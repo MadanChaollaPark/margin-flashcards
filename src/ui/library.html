@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cards · Margin</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="library.js"></script>
+</head>
+<body>
+  <main class="library">
+    <header>
+      <div class="brand"><img src="icon.svg" alt=""><span>Margin</span></div>
+      <nav aria-label="Margin pages"><a href="review.html">Review</a><a href="options.html">Options</a></nav>
+    </header>
+    <p id="demo-banner" class="demo-banner" hidden>DEMO MODE (simulated AI)</p>
+    <h1 class="page-heading">Cards</h1>
+    <div class="surface library-filters">
+      <label>Search cards
+        <input id="search" type="search" placeholder="Front, back, or tags">
+      </label>
+      <div>
+        <label for="deck-filter">Filter by deck</label>
+        <select id="deck-filter"><option value="">All decks</option></select>
+      </div>
+    </div>
+    <p id="toast" class="toast" role="status" aria-live="polite"></p>
+    <p id="library-count" class="hint" aria-live="polite">Loading saved cards…</p>
+    <div id="library-cards" class="stack"></div>
+    <template id="library-card">
+      <article class="surface stack library-card">
+        <div class="row library-meta">
+          <p class="hint"><span class="card-deck"></span> <span aria-hidden="true">·</span> Due <time></time></p>
+          <div class="actions">
+            <button class="secondary small edit-card" type="button" aria-expanded="false">Edit</button>
+            <button class="quiet small danger delete-card" type="button">Delete</button>
+          </div>
+        </div>
+        <div class="card-copy">
+          <h2></h2>
+          <p class="preview-back"></p>
+          <ul class="tags" aria-label="Tags"></ul>
+        </div>
+        <form class="library-editor" hidden>
+          <label><span>Front</span><textarea name="front" rows="2" required></textarea></label>
+          <label>Back<textarea name="back" rows="3" required></textarea></label>
+          <div class="library-filters">
+            <label>Tags<input name="tags" type="text" placeholder="Separate tags with spaces"></label>
+            <div>
+              <label class="edit-deck-label">Deck</label>
+              <select name="deck"></select>
+            </div>
+          </div>
+          <p class="hint error" role="alert" hidden></p>
+          <div class="actions">
+            <button type="submit">Save changes</button>
+            <button class="secondary cancel-edit" type="button">Cancel</button>
+          </div>
+        </form>
+        <div class="library-route"></div>
+      </article>
+    </template>
+  </main>
+</body>
+</html>

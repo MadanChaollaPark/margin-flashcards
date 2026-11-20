@@ -1,0 +1,17 @@
+[tool] Reading sync.ts:1, init.ts:1, firebaseProvider.ts:1, options.ts:1, firestore.rules:1
+[tool] status: Completed
+[tool] Reading diagnostics.ts:1
+[tool] status: Completed
+I found five issues. The first three can break the live path outright. I didn't read `background.ts`, `runtime.ts` or `remoteConfig.ts`, so I couldn't check Remote Config fetch logic or the init order in the side panel.
+
+1. **`src/ai/firebaseProvider.ts` ~L96: cloud requests carry a field the API doesn't accept.** The line `{ type: "text", text: prompt }` adds a `type` key that isn't part of the `Part` type in `firebase/ai`. If the SDK sends parts to the Gemini REST API unchanged, which I haven't confirmed, the API rejects every cloud call with a 400 "Unknown name type". That would include **Only cloud** and the live test's cloud fallback. Fix: `const parts: Part[] = [{ text: prompt }];`
+
+2. **`src/firebase/sync.ts` L1: wrong Auth import for an extension.** In an MV3 extension, Firebase says to import Auth from `firebase/auth/web-extension`. The main `firebase/auth` build bundles remote-script loaders that MV3 doesn't allow, and backup runs in the service worker. Fix: `import { indexedDBLocalPersistence, initializeAuth, signInAnonymously } from "firebase/auth/web-extension";`
+
+3. **`src/firebase/init.ts` L6/L15 with `options.ts` `runBackup`: the backup can keep using an old debug token.** Backup runs in the service worker through `chrome.runtime.sendMessage`. The worker caches `initialized` and keeps it until Chrome stops the worker. After you save a new App Check debug token, "Reopen Margin" doesn't reset the worker, so backups keep getting App Check 403s. The worker also logs its own debug-token line, but the README only points to the pages. Fix: in the background script, watch `chrome.storage.onChanged` for `appCheckDebugToken` and call `chrome.runtime.reload()`.
+
+4. **`src/ui/diagnostics.ts` ~L95: the App Check check tests a different token type.** It calls `getToken`, but `getAI` uses `useLimitedUseAppCheckTokens: true`, so "Obtainable" doesn't prove AI requests will pass. Fix: `import { getLimitedUseToken } from "firebase/app-check"` and use `withTimeout(getLimitedUseToken(initialized.appCheck), 5_000)`.
+
+5. **`src/ui/diagnostics.ts` ~L86–90 and ~L121.**
+   - The `catch` around `initializeFirebaseAppCheck` labels every error, including missing config, as "debug token needs registering". Fix: `setStatus("app-check", message(error, "Unavailable"), "error")`.
+   - In the live test, `if (current !== revision) return;` leaves "Running…" on screen. Fix: set `liveResult.textContent = ""` before returning.

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Review · Margin</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="review.js"></script>
+</head>
+<body>
+  <main class="room">
+    <header>
+      <div class="brand"><img src="icon.svg" alt=""><span>Margin</span></div>
+      <nav aria-label="Margin pages"><a href="review.html" id="all-due" hidden>All due</a><a href="library.html">Cards</a><a href="options.html">Options</a></nav>
+    </header>
+    <p id="demo-banner" class="demo-banner" hidden>DEMO MODE (simulated AI)</p>
+    <div class="review-heading"><h1>Review</h1></div>
+    <div class="session-progress" id="session-progress" hidden>
+      <p id="review-progress"></p>
+      <progress id="progress" aria-label="Review progress"></progress>
+    </div>
+    <p id="review-status" class="empty" role="status">Loading your cards…</p>
+    <p id="toast" class="toast" role="status" aria-live="polite"></p>
+    <div class="review-stage">
+      <section class="surface study-card" id="study" aria-labelledby="card-front" hidden>
+        <h2 id="card-front" tabindex="-1"></h2>
+        <a id="show-source" target="_blank" rel="noopener noreferrer" hidden>Show source</a>
+        <form id="answer-form">
+          <label for="answer">Your answer <span class="hint">(optional)</span></label>
+          <input id="answer" maxlength="1500" autocomplete="off">
+          <div class="actions">
+            <button id="check" type="submit" disabled>Check</button>
+            <button id="reveal" class="secondary" type="button">Reveal answer</button>
+          </div>
+        </form>
+        <div id="revealed" hidden>
+          <div class="answer-comparison">
+            <div id="submitted-answer" hidden><h3>Your answer</h3><p id="user-answer"></p></div>
+            <div><h3>Answer</h3><p id="card-back"></p></div>
+          </div>
+          <div id="generation-route"></div>
+          <div id="feedback" class="feedback" aria-live="polite" hidden></div>
+          <div class="ratings" id="ratings" aria-label="Rate this card"></div>
+        </div>
+      </section>
+      <section id="caught-up" class="surface stack study-card" hidden>
+        <h2 id="empty-heading">All caught up</h2>
+        <p id="next-due" class="hint"></p>
+      </section>
+      <p id="shortcuts" class="hint" hidden><kbd>Space</kbd> reveal <span>·</span> <span id="check-shortcut"><kbd>Enter</kbd> check <span>·</span></span> <kbd>1</kbd>–<kbd>4</kbd> rate</p>
+      <section id="summary" class="surface stack study-card" hidden>
+        <h2 id="summary-heading" tabindex="-1">Session complete</h2>
+        <p id="summary-count"></p>
+        <dl id="summary-ratings" class="stats"></dl>
+        <a href="review.html">See all due cards</a>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

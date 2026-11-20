@@ -1,0 +1,36 @@
+{
+  "name": "flashcard-ext",
+  "version": "1.0.0",
+  "description": "Margin turns reading into flashcards with on-device and cloud AI.",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --import tsx --test test/unit/*.test.ts",
+    "test:e2e": "npm run build && playwright test",
+    "typecheck": "tsc --noEmit",
+    "screenshots": "npm run build && node --import tsx scripts/screenshots.mjs",
+    "package": "npm run build && node scripts/package.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "Apache-2.0",
+  "type": "module",
+  "dependencies": {
+    "fflate": "^0.8.3",
+    "firebase": "^13.4.0",
+    "pdfjs-dist": "^6.5.438",
+    "sql.js": "^1.17.0",
+    "ts-fsrs": "^6.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "@types/chrome": "^0.3.7",
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^26.6.6",
+    "@types/sql.js": "^1.16.0",
+    "esbuild": "^0.28.2",
+    "jsdom": "^31.0.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "private": true
+}
