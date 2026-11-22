@@ -48,6 +48,7 @@ const test = base.extend<{ margin: Margin }>({
       expect(manifest.host_permissions).toBeUndefined();
       const hosts = testInfo.annotations.some(({ type }) => type === "capture-visible-tab")
         ? ["<all_urls>"] : ["http://127.0.0.1/*"];
+      if (testInfo.annotations.some(({ type }) => type === "youtube-captions")) hosts.push("https://www.youtube.com/*");
       await writeFile(manifestPath, JSON.stringify({ ...manifest, host_permissions: hosts }));
       const context = await chromium.launchPersistentContext(profile, {
         channel: "chromium",
@@ -84,6 +85,91 @@ async function extensionPage(margin: Margin, path: string): Promise<Page> {
   return page;
 }
 
+async function generateFromNotes(panel: Page, text: string) {
+  const edit = panel.getByRole("button", { name: "Edit capture" });
+  if (await edit.isVisible()) await edit.click();
+  await panel.getByLabel("Source", { exact: true }).selectOption("paste");
+  await panel.getByLabel("Notes").fill(text);
+  await panel.getByRole("button", { name: "Generate", exact: true }).click();
+}
+
+async function checkAccessibleNames(page: Page) {
+  const controls = page.locator("button, a[href], input, select, textarea, [role=button]").filter({ visible: true });
+  for (const control of await controls.all()) {
+    const tag = await control.evaluate((node) => node.tagName.toLowerCase() + (node.id ? "#" + node.id : ""));
+    await expect.soft(control, `${new URL(page.url()).pathname} ${tag}`).toHaveAccessibleName(/\S/u, { timeout: 500 });
+  }
+}
+
+async function checkKeyboardFocus(page: Page) {
+  const focusedButton = page.locator("button:focus-visible, [role=button]:focus-visible");
+  for (let i = 0; i < 40; i++) {
+    await page.keyboard.press("Tab");
+    if (await focusedButton.count()) {
+      const focusVisible = await focusedButton.evaluate((button) => {
+        const { outlineStyle, outlineWidth, boxShadow } = getComputedStyle(button);
+        return (outlineStyle !== "none" && parseFloat(outlineWidth) > 0) || boxShadow !== "none";
+      });
+      expect(focusVisible, `Keyboard focus indicator on ${new URL(page.url()).pathname}`).toBe(true);
+      return;
+    }
+  }
+  throw new Error(`Tab did not reach a button on ${new URL(page.url()).pathname}.`);
+}
+
+const contrastTargets = {
+  "Demo banner": ".demo-banner",
+  "On-device": ".route summary.device",
+  Cloud: ".route summary.cloud",
+  "Kept local": ".route summary.private",
+  Queued: ".route summary.queued",
+  Simulated: ".feedback .badge",
+  "Primary buttons": "button:not(.secondary, .quiet, .danger, :disabled), a.button:not(.secondary, .quiet)",
+  "Secondary buttons": "button.secondary:not(:disabled), a.button.secondary",
+  "Body text": "main, .preview-front, #card-front, .library-card h2",
+  "Muted text": ".hint, .preview-back, .quiet:not(:disabled)",
+};
+
+async function measureContrast(page: Page) {
+  return page.evaluate((targets) => {
+    function rgba(color: string) {
+      const [r, g, b, alpha = 1] = color.match(/[\d.]+/gu)!.map(Number);
+      return { r, g, b, alpha };
+    }
+    function luminance({ r, g, b }: ReturnType<typeof rgba>) {
+      const linear = (component: number) => {
+        const value = component / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+    }
+    function over(top: ReturnType<typeof rgba>, bottom: ReturnType<typeof rgba>) {
+      const blend = (above: number, below: number) => above * top.alpha + below * (1 - top.alpha);
+      return { r: blend(top.r, bottom.r), g: blend(top.g, bottom.g), b: blend(top.b, bottom.b), alpha: 1 };
+    }
+    function background(node: Element): ReturnType<typeof rgba> {
+      const color = rgba(getComputedStyle(node).backgroundColor);
+      if (color.alpha === 1) return color;
+      if (!node.parentElement) throw new Error("No opaque background found.");
+      return over(color, background(node.parentElement));
+    }
+    return Object.entries(targets).flatMap(([label, selector]) =>
+      [...document.querySelectorAll<HTMLElement>(selector)]
+        .filter((node) => node.checkVisibility({ visibilityProperty: true }) && node.innerText.trim())
+        .map((node) => {
+          const foreground = getComputedStyle(node).color;
+          const bg = background(node);
+          const a = luminance(over(rgba(foreground), bg));
+          const b = luminance(bg);
+          return {
+            label, text: node.innerText.trim().slice(0, 60), foreground,
+            background: `rgb(${bg.r}, ${bg.g}, ${bg.b})`, ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
+          };
+        }),
+    );
+  }, contrastTargets);
+}
+
 async function sendCapture(margin: Margin, url: string, kind: "page" | "pdf" | "selection" | "image") {
   await margin.worker.evaluate(async ({ url, kind }) => {
     const [tab] = await chrome.tabs.query({ url });
@@ -93,6 +179,115 @@ async function sendCapture(margin: Margin, url: string, kind: "page" | "pdf" | "
     await chrome.runtime.sendMessage({ type: "margin.capture", windowId: tab.windowId }).catch(() => {});
   }, { url, kind });
 }
+
+test("judge quick look generates simulated cards and starts a fresh review", async ({ margin }) => {
+  const popup = await extensionPage(margin, "popup.html");
+  const openPanel = popup.getByRole("button", { name: "Open side panel" });
+  await expect(openPanel).toBeVisible();
+  await expect(openPanel).toBeEnabled();
+  const panel = await extensionPage(margin, "sidepanel.html");
+  const welcome = panel.getByRole("heading", { name: "Welcome to Margin" });
+  await expect(welcome).toBeVisible();
+  await panel.getByRole("button", { name: "Try a sample" }).click();
+  await expect(welcome).toBeHidden();
+  await panel.getByRole("button", { name: "Generate", exact: true }).click();
+  await expect(panel.locator(".card .badge").first()).toHaveText("Simulated · On-device");
+  await expect(panel.getByText("DEMO MODE (simulated AI)", { exact: true })).toBeVisible();
+  await panel.getByRole("button", { name: /^Save \d+ cards? to/u }).click();
+  await expect(panel.getByRole("status")).toHaveText(/^Saved \d+ cards?\.$/u);
+
+  const [review] = await Promise.all([
+    panel.waitForEvent("popup"), panel.getByRole("link", { name: "Review", exact: true }).click(),
+  ]);
+  const front = review.locator("#card-front");
+  await expect(front).toBeVisible();
+  const firstFront = await front.innerText();
+  await review.getByRole("button", { name: "Reveal answer" }).click();
+  await expect(review.locator("#revealed")).toBeVisible();
+  await review.getByRole("button", { name: /^Good\b/u }).click();
+  await expect(review.getByText(/^1 of \d+ complete$/u)).toBeVisible();
+  await expect(front).not.toHaveText(firstFront);
+
+  expect(await margin.worker.evaluate(() => chrome.storage.local.get("welcomeSeen"))).toEqual({ welcomeSeen: true });
+  await panel.reload();
+  await expect(panel.getByText("DEMO MODE (simulated AI)", { exact: true })).toBeVisible();
+  await expect(welcome).toBeHidden();
+  expect(margin.errors).toEqual([]);
+});
+
+test("accessibility sweep covers five extension pages in light and dark", async ({ margin }) => {
+  const panel = await extensionPage(margin, "sidepanel.html");
+  await expect(panel.getByRole("heading", { name: "Welcome to Margin" })).toBeVisible();
+  await checkAccessibleNames(panel);
+  await panel.getByRole("button", { name: "Try a sample" }).click();
+  await panel.getByRole("button", { name: "Generate", exact: true }).click();
+  await expect(panel.locator(".card .badge.device").first()).toBeVisible();
+  await panel.getByRole("button", { name: /^Save \d+ cards? to/u }).click();
+  await expect(panel.getByRole("status")).toHaveText(/^Saved \d+ cards?\.$/u);
+
+  const options = await extensionPage(margin, "options.html");
+  await generateFromNotes(panel, "Turgor pressure is the force of water pushing against a cell wall.");
+  await expect(panel.locator(".card .badge.device")).toHaveText("Simulated · On-device");
+  await generateFromNotes(panel, piiSample);
+  await expect(panel.locator(".card .badge.private")).toHaveText("Simulated · Kept local");
+  await options.getByLabel("Inference mode").selectOption("only-cloud");
+  await expect(options.getByRole("status")).toHaveText("Settings saved.");
+  await generateFromNotes(panel, "Aquaporins are proteins that let water cross a cell membrane.");
+  await expect(panel.locator(".card .badge.cloud")).toHaveText("Simulated · Cloud");
+  await margin.context.setOffline(true);
+  await expect(panel.getByText("Offline · on-device only", { exact: true })).toBeVisible();
+  await generateFromNotes(panel, "Dendrochronology means dating events using patterns in tree rings.");
+  await expect(panel.locator(".route .badge.queued")).toHaveText("Queued");
+  await panel.locator(".route .badge.queued").click();
+  await expect(panel.getByText(/^Simulated — .*queue/iu)).toBeVisible();
+  await panel.getByLabel("Source", { exact: true }).selectOption("image");
+  await expect(panel.getByLabel("Image file")).toBeVisible();
+  await options.reload();
+
+  const popup = await extensionPage(margin, "popup.html");
+  const review = await extensionPage(margin, "review.html");
+  const library = await extensionPage(margin, "library.html");
+  await expect(popup.getByText(/^\d+ cards due$/u)).toBeVisible();
+  await expect(library.locator(".library-card").first()).toBeVisible();
+  await expect(library.getByRole("button", { name: "Edit", exact: true }).first()).toBeVisible();
+  await library.getByRole("button", { name: "Edit", exact: true }).first().click();
+  await expect(library.getByLabel("Back", { exact: true })).toBeVisible();
+  await expect(review.locator("#card-front")).toBeVisible();
+
+  for (const colorScheme of ["light", "dark"] as const) {
+    const contrasts: Awaited<ReturnType<typeof measureContrast>> = [];
+    for (const page of [panel, popup, review, library, options]) {
+      await test.step(`${colorScheme} ${new URL(page.url()).pathname}`, async () => {
+        await page.bringToFront();
+        await page.emulateMedia({ colorScheme });
+        await expect(page.locator("html")).toHaveAttribute("lang", "en");
+        await expect(page.getByText("DEMO MODE (simulated AI)", { exact: true })).toBeVisible();
+        if (page === review) {
+          await review.reload();
+          await review.getByLabel("Your answer").fill("A practice answer");
+          await checkAccessibleNames(review);
+          contrasts.push(...await measureContrast(review));
+          await review.getByRole("button", { name: "Check", exact: true }).click();
+          await expect(review.locator(".feedback .badge")).toHaveText("Simulated · Graded on-device");
+        }
+        await checkAccessibleNames(page);
+        await checkKeyboardFocus(page);
+        contrasts.push(...await measureContrast(page));
+      });
+    }
+    const minima = Object.keys(contrastTargets).map((label) => {
+      const measured = contrasts.filter((sample) => sample.label === label);
+      expect(measured.length, `${colorScheme} ${label} was measured`).toBeGreaterThan(0);
+      return measured.reduce((lowest, sample) => sample.ratio < lowest.ratio ? sample : lowest);
+    });
+    for (const sample of minima) {
+      expect.soft(sample.ratio, `${colorScheme} ${sample.label}: ${sample.text} (${sample.foreground} on ${sample.background})`)
+        .toBeGreaterThanOrEqual(4.5);
+    }
+    console.log(`Minimum text contrast (${colorScheme}): ${minima.map(({ label, ratio }) => `${label} ${ratio.toFixed(2)}:1`).join(", ")}`);
+  }
+  expect(margin.errors).toEqual([]);
+});
 
 test("page capture reaches the panel, cards can be edited and reviewed, and both exports download", async ({ margin }) => {
   const article = await margin.context.newPage();
@@ -246,6 +441,74 @@ test("page capture reaches the panel, cards can be edited and reviewed, and both
   await expect(options.getByRole("status")).toHaveText("Deck deleted.");
   await popup.reload();
   await expect(popup.getByText("0 cards due")).toBeVisible();
+  await panel.reload();
+  await expect(panel.getByText("DEMO MODE (simulated AI)", { exact: true })).toBeVisible();
+  await expect(panel.getByRole("heading", { name: "Welcome to Margin" })).toBeHidden();
+  expect(margin.errors).toEqual([]);
+});
+
+test("long notes generate deduplicated on-device chunks offline and route to cloud online", async ({ margin }) => {
+  const options = await extensionPage(margin, "options.html");
+  await expect(options.getByLabel("Inference mode")).toHaveValue("auto");
+  await options.close();
+  const panel = await extensionPage(margin, "sidepanel.html");
+  const notes = ("Turgor pressure is the force of water pushing against a cell wall. " +
+    "Osmosis means diffusion of water through a semipermeable membrane. ").repeat(300);
+
+  await margin.context.setOffline(true);
+  await expect(panel.getByText("Offline · on-device only", { exact: true })).toBeVisible();
+  await generateFromNotes(panel, notes);
+  const badges = panel.locator(".card .badge");
+  await expect(badges).toHaveText(["Simulated · On-device", "Simulated · On-device"]);
+  await badges.first().click();
+  await expect(panel.getByText(/Split into 2 on-device chunks\./iu)).toBeVisible();
+  await expect(panel.locator(".preview-front")).toHaveText(["What is Turgor pressure?", "What is Osmosis?"]);
+
+  await margin.context.setOffline(false);
+  await panel.reload();
+  await generateFromNotes(panel, notes);
+  await expect(badges).toHaveText(["Simulated · Cloud", "Simulated · Cloud"]);
+  await badges.first().click();
+  await expect(panel.getByText(/exceeds the on-device token budget/iu)).toBeVisible();
+  expect(margin.errors).toEqual([]);
+});
+
+test("YouTube captions generate source-linked cards in the side panel", {
+  annotation: { type: "youtube-captions" },
+}, async ({ margin }) => {
+  const videoUrl = "https://www.youtube.com/watch?v=margin-demo";
+  const captionUrl = "https://www.youtube.com/api/timedtext?v=margin-demo&lang=en";
+  const playerResponse = { captions: { playerCaptionsTracklistRenderer: {
+    captionTracks: [{ baseUrl: captionUrl, languageCode: "en" }],
+  } } };
+  await margin.context.route("https://www.youtube.com/**", async (route) => {
+    switch (route.request().url()) {
+      case videoUrl:
+        await route.fulfill({ contentType: "text/html", body: `<!doctype html><title>Light and plants</title>
+          <script>window.ytInitialPlayerResponse = ${JSON.stringify(playerResponse)};</script>` });
+        break;
+      case captionUrl:
+        await route.fulfill({ contentType: "text/xml", path: resolve(fixtureDir, "captions.xml") });
+        break;
+      default:
+        await route.fulfill({ status: 204 });
+    }
+  });
+  const video = await margin.context.newPage();
+  await video.goto(videoUrl);
+  const panel = await extensionPage(margin, "sidepanel.html");
+  await panel.getByLabel("Source", { exact: true }).selectOption("youtube");
+  // A real side panel leaves the video tab active. Keep that browser state when testing sidepanel.html.
+  await video.bringToFront();
+  await panel.getByRole("button", { name: "Generate", exact: true }).dispatchEvent("click");
+  await expect(panel.locator(".card .badge")).toHaveText(["Simulated · On-device"]);
+  await expect(panel.locator(".preview-front")).toHaveText("What is Chlorophyll?");
+  await expect(panel.locator(".preview-back")).toHaveText("A pigment that captures light.");
+  await panel.getByRole("button", { name: /^Save \d+ cards? to/u }).click();
+  await expect(panel.getByRole("status")).toHaveText("Saved 1 card.");
+
+  const review = await extensionPage(margin, "review.html");
+  await expect(review.getByRole("link", { name: "Show source" })).toHaveAttribute("href", videoUrl);
   expect(margin.errors).toEqual([]);
 });
 

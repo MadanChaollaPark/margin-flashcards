@@ -19,6 +19,7 @@ research/*.html
 research/*.htm
 
 # loop runtime (driver-owned; do not wipe, but do not publish raw logs)
+/logs/
 STATE/logs/
 STATE/driver.out
 STATE/runtime.json

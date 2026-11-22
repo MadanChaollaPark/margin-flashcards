@@ -522,7 +522,7 @@ self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
 initializeAppCheck(firebaseApp, { /* App Check options */ });
 Visit your web app locally and open the browser's developer tools. In the
 debug console, you'll see a debug token:
-AppCheck debug token: "123a4567-b89c-12d3-e456-789012345678".
+AppCheck debug token: "<DEBUG_TOKEN>".
 You will need to safelist it in the Firebase console for it to work.
 Register your debug token with App Check:
 In the Firebase console, go to the

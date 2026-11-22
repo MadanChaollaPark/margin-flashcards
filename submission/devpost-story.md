@@ -8,34 +8,34 @@
 
 ## Inspiration
 
-Take a third-year medical student. Every day she reads lecture slides, guidelines and her own case notes. Spaced repetition is the best-evidenced way to keep that knowledge, but writing good flashcards by hand takes longer than the reading itself, so most students give up on it.
+Take a third-year medical student. Every day she reads lecture slides, guidelines and her own case notes. Spaced repetition helps her remember what she reads, but writing good flashcards by hand takes time she could spend studying.
 
-AI card generators fix the time problem by sending your reading to a server. That rules them out for the material people most need to remember: patient-case notes, internal work docs, contracts, a journal in a language you're learning. They also stop working when you're offline, for example on the subway.
+Cloud-based card generation can save time, but it needs a connection and sends the reading to a server. That can be a poor fit for sensitive notes, internal work documents or study sessions on the subway.
 
-Firebase AI Logic's hybrid inference let us build something different. **Gemini Nano on the device acts as the gatekeeper and does the everyday work. Content goes to cloud Gemini only when it needs to and is allowed to, and every one of those decisions is shown to the user.**
+**Margin uses Gemini Nano for everyday generation and to screen eligible text locally before cloud inference.** Users can choose their inference preferences, require on-device processing and see where each generated card came from.
 
 ## What it does
 
 Margin is a Chrome extension that turns what you read into spaced-repetition flashcards. It's built around the split between device and cloud:
 
 - **Capture from anywhere**
-  - Right-click and choose "Make flashcards from selection", "…from this page" or "…from image".
+  - Right-click and choose "Make flashcards from selection", "Make flashcards from this page" or "Make flashcards from image".
   - The side panel also accepts a PDF open in the tab (text extracted locally with pdf.js), a YouTube video's captions, a screenshot or image file, and pasted notes.
 - **A router that explains every decision**
-  - Every generated card has a route badge: *On-device*, *Cloud*, *Kept local* or *Queued*.
-  - Expand the badge to see the reason, for example:
-    - "Fits on-device budget"
+  - Generated cards carry an *On-device*, *Cloud* or *Kept local* badge. Pending cloud captures show *Queued*.
+  - Expand the badge to read a reason such as one of these.
+    - "Fits on-device budget — Firebase AI Logic preferred Gemini Nano"
     - "Sensitive content stays on-device."
     - "This input exceeds the on-device token budget."
     - "PDFs without enough extractable text require cloud inference."
   - The badge stays with the card in the library and during review.
 - **Gemini Nano as the cloud gatekeeper**
-  - Before captured text can go to the cloud, it passes a local pattern check. When Nano is ready, it also passes a Gemini Nano structured-output classification. Image-only captures skip the Nano check.
+  - A local pattern check screens captured text. With the sensitivity check enabled and Nano ready, Margin uses structured-output classification on eligible text that could otherwise go to the cloud.
   - If the text looks sensitive, the job stays on-device, split into chunks if needed.
-  - If the pattern check flags text and Nano can't confirm, Margin asks you before sending anything. If you decline, nothing is sent.
+  - When a pattern match is the sole sensitivity signal and Nano is unavailable, Margin can request consent for that capture. Privacy mode and Only on-device keep it local.
 - **Privacy mode:** forces on-device inference, so no source content leaves your machine.
 - **Works offline**
-  - With Nano ready, captures keep working with no connection. Long text is split into on-device chunks.
+  - With Nano ready, compatible captures keep working offline. Long text is split into on-device chunks.
   - Jobs that truly need the cloud, such as scanned PDFs, are queued. They retry with backoff while the side panel is open and you're back online. You can also retry them manually from Options.
 - **Review with private answer grading**
   - You type your answer and Gemini Nano grades it on-device: Correct, Partly correct or Incorrect.
@@ -46,7 +46,7 @@ Margin is a Chrome extension that turns what you read into spaced-repetition fla
   - A searchable card library where you can edit, retag, move cards between decks or delete them.
   - Decks and de-duplication.
   - One-click export to an Anki package (.apkg) or a TSV file Anki can import.
-- **Source anchors:** cards made from a selection link back to the highlighted passage with a text-fragment URL. Whole-page cards link to their source excerpt when Margin can find it.
+- **Source anchors:** cards made from a selection link back to the highlighted passage with a text-fragment URL. Whole-page cards link to their source excerpt when Margin can find it. Cards from a YouTube transcript link back to the video page.
 - **Transparency**
   - Stats show what share of cards were generated on-device and how much source data stayed local.
   - A Diagnostics card checks Prompt API availability, App Check and Remote Config, and can run a live hybrid test call.
@@ -62,14 +62,14 @@ Margin is a Chrome extension that turns what you read into spaced-repetition fla
     - `ONLY_IN_CLOUD` for scanned PDFs and videos without captions.
   - We read `response.inferenceSource`, so every generation badge reports what actually ran.
   - `initializeDeviceModel()` is called only from the "Enable on-device AI" click, with a download progress bar.
-  - Cards, grades and sensitivity results all use `responseSchema` structured JSON, on both device and cloud.
+  - Cards, grades and sensitivity results use `responseSchema` for structured JSON. Grading and sensitivity checks run on-device.
 - **The router** is a pure, unit-tested `decide(job, ctx)` function. It weighs:
   - the input type: text, PNG/JPEG image, PDF or YouTube
   - a script-aware token estimate against the on-device budget, with room reserved for output under Nano's 9,216-token limit
   - whether Nano is available, downloadable, downloading or unavailable
   - online state, sensitivity, privacy mode and the user's override
   
-  It always returns a human-readable reason, and tests check that each of the four inference modes is reachable.
+  Routing decisions include a human-readable reason. Unit tests assert that all four Firebase inference modes are reachable.
 - **Firebase App Check:** AI Logic requires it. We use the debug provider on the `chrome-extension://` origin, which the rules accept.
 - **Firebase Remote Config** supplies the routing values: the on-device token budget, the model names (`gemini-3.5-flash-lite` for standard requests, `gemini-3.8-flash` for long documents) and cards per chunk. Safe defaults are built in.
 - **Firebase Authentication + Cloud Firestore** power an optional deck backup, off by default.
@@ -79,7 +79,7 @@ Margin is a Chrome extension that turns what you read into spaced-repetition fla
 - **Chrome MV3**
   - Side panel, popup, review page, library and options pages.
   - Context menus. Host permissions are optional and requested only when needed.
-  - All inference runs in extension pages, where the Prompt API is exposed. The service worker only handles messaging.
+  - All inference runs in extension pages, where the Prompt API is exposed. The service worker handles context menus, capture handoffs and backup operations.
   - Everything is bundled with esbuild, with no remote code. sql.js (WASM) builds the .apkg files.
 - **Testing**
   - node:test unit tests cover the router, parser, de-dupe, chunking, queue, FSRS, TSV/.apkg export and sync mapping.

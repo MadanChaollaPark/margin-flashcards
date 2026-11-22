@@ -10,6 +10,7 @@ Margin is a Chrome extension that turns web pages, highlights, PDFs, YouTube vid
 
 - Generate basic or cloze cards, then search, edit, move, or delete saved cards in **Cards**.
 - Follow source links back to highlighted selections or excerpts from captured pages where text fragments are supported.
+- From a source tab, use **Make flashcards from selection**, **Make flashcards from this page**, or **Make flashcards from image**. Choose **YouTube** in the side panel to use a video's captions. The resulting cards link back to the video page.
 - Check typed answers with Gemini Nano and use the suggested rating or rate yourself. FSRS schedules the next review.
 - See on-device routing stats, turn on Privacy mode, and manage offline captures.
 - Export decks to Anki as TSV or `.apkg`.
@@ -25,7 +26,7 @@ Margin is a Chrome extension that turns web pages, highlights, PDFs, YouTube vid
 
 ## Built with AI coding tools
 
-Claude Opus 5.5 via Kiro CLI handled architecture and reviews. GPT-6.2 Sol via Codex CLI handled implementation. All runtime AI inference runs through Firebase AI Logic.
+Claude Opus 5.5 via Kiro CLI handled architecture and reviews. GPT-6.2 Sol via Codex CLI handled implementation. Live AI inference runs through Firebase AI Logic.
 
 ## Hybrid architecture
 
@@ -78,6 +79,8 @@ The sensitivity gate combines patterns with local text classification on eligibl
 
 **From source**
 
+Use Node.js 24 LTS (24.15 or newer).
+
 ```sh
 npm ci
 npm run build
@@ -99,6 +102,8 @@ Margin uses **Firebase AI Logic** for hybrid inference, **App Check** to attest 
 ## Demo mode
 
 Without Firebase configuration, Margin uses a deterministic simulation for generation, routing, and answer feedback. A **DEMO MODE (simulated AI)** banner identifies every extension page in that mode. Options can enable the simulation on a configured build, and `MOCK=1 npm run build` forces it for the built extension. Demo generation and grading work without Firebase credentials.
+
+For a quick look, open the side panel, select **Try a sample** and **Generate**, then save the cards. Open **Review**, choose **Reveal answer**, and rate the card. [Judge testing instructions](submission/testing-instructions.md)
 
 ## Diagnostics
 
@@ -128,7 +133,7 @@ Use Node.js 24 LTS (24.15 or newer) and install Playwright Chromium with `npx pl
 | `npm run typecheck` | Check TypeScript. |
 | `npm test` | Run unit tests. |
 | `npm run test:e2e` | Build and run the extension in Playwright Chromium in demo mode. |
-| `npm run screenshots` | Build and render screenshots and the 1500 × 1000 cover in `submission/screenshots/` with a seeded study library. |
+| `npm run screenshots` | Build and render screenshots and the 1500 × 1000 cover in `submission/screenshots` with a seeded study library. |
 | `npm run package` | Build and create `margin-extension.zip` with the manifest at the archive root. |
 
 ## Project structure

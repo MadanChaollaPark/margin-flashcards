@@ -171,8 +171,8 @@ async function renderCover(page) {
         display: block; position: absolute; border: 1px solid #ffffff90; border-radius: 18px;
         box-shadow: 0 35px 64px #14224e66, 0 8px 20px #14224e44;
       }
-      .panel { left: 739px; top: 108px; width: 330px; transform: rotate(-8deg); }
-      .review { left: 893px; top: 425px; width: 510px; transform: rotate(7deg); }
+      .panel { left: 726px; top: 130px; width: 270px; transform: rotate(-4deg); }
+      .review { left: 1036px; top: 425px; width: 420px; transform: rotate(4deg); }
     </style>
     <main>
       <img class="logo" alt="" src="data:image/svg+xml;base64,${logo}">
@@ -216,18 +216,20 @@ try {
     await panel.getByLabel("Save to deck").selectOption("biology");
     await panel.getByRole("button", { name: "Generate" }).click();
     await expect(panel.locator(".card")).toHaveCount(CELL_BIOLOGY_CARDS.length);
+    await panel.setViewportSize({ width: 420, height: 930 });
     await shot(panel, "01-sidepanel-generated");
 
+    const heroHeight = 765;
     const hero = await context.newPage();
-    await hero.setViewportSize({ width: 1280, height: 800 });
+    await hero.setViewportSize({ width: 1280, height: heroHeight });
     const articlePage = await context.newPage();
-    await articlePage.setViewportSize({ width: 860, height: 800 });
+    await articlePage.setViewportSize({ width: 860, height: heroHeight });
     await articlePage.setContent(article);
-    await panel.setViewportSize({ width: 420, height: 800 });
+    await panel.setViewportSize({ width: 420, height: heroHeight });
     const [reading, extension] = await Promise.all([articlePage.screenshot(), panel.screenshot()]);
     await hero.setContent(`<!doctype html><meta charset="utf-8"><title>Margin · Cell biology</title>
       <style>*{box-sizing:border-box}body{margin:0;display:grid;grid-template-columns:860px 420px}
-      img{display:block;width:100%;height:800px}section{box-shadow:-1px 0 0 #cdd7cd,-14px 0 28px #1e382018}</style>
+      img{display:block;width:100%;height:${heroHeight}px}section{box-shadow:-1px 0 0 #cdd7cd,-14px 0 28px #1e382018}</style>
       <img alt="Cell membrane article" src="data:image/png;base64,${reading.toString("base64")}">
       <section><img alt="Margin side panel with flashcards" src="data:image/png;base64,${extension.toString("base64")}"></section>`);
     await hero.locator("img").evaluateAll((images) => Promise.all(images.map((img) => img.decode())));
@@ -265,7 +267,7 @@ try {
     await review.getByLabel("Your answer").fill("Glucose");
     await review.getByRole("button", { name: "Check", exact: true }).click();
     await expect(review.getByText("Simulated — Incorrect", { exact: true })).toBeVisible();
-    await shot(review, "09-review-dark");
+    await shot(review, "10-review-dark");
 
     const options = await pageAt("options.html", 980, 880);
     await expect(options.getByText("Simulated on-device activity")).toBeVisible();
@@ -288,8 +290,9 @@ try {
     ]);
     if (download.suggestedFilename() !== "Cell Biology.apkg") throw new Error("Unexpected export name.");
     await expect(options.getByText("Exported 15 cards.", { exact: true })).toBeVisible();
-    await options.locator("#export-heading").scrollIntoViewIfNeeded();
-    await shot(options, "08-export");
+    await options.evaluate(() => window.scrollTo(0, 0));
+    await expect(options.getByText("DEMO MODE (simulated AI)", { exact: true })).toBeInViewport();
+    await shot(options, "08-export", { fullPage: true });
 
     const cards = await pageAt("library.html", 980, 880);
     await cards.getByLabel("Filter by deck").selectOption("biology");

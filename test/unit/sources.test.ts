@@ -8,7 +8,7 @@ import { encodeBase64, MAX_INLINE_MEDIA_BYTES, readImage, sniffImageType } from 
 import { extractPage } from "../../src/sources/page";
 import { extractPdfText, pdfInput } from "../../src/sources/pdf";
 import { textFragmentUrl } from "../../src/sources/selection";
-import { parseCaptions, youtubeVideoUrl } from "../../src/sources/youtube";
+import { parseCaptions, readCaptionTracks, youtubeVideoUrl } from "../../src/sources/youtube";
 
 const fixture = (path: string) => new URL(`../fixtures/${path}`, import.meta.url);
 const pngSignature = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -168,12 +168,13 @@ test("parses YouTube timedtext XML and JSON3 and skips duplicate lines", async (
   const dom = new JSDOM();
   try {
     const parser = new dom.window.DOMParser();
-    const expected = "Plants & algae use light.\nEnergy is stored as sugar.";
+    const expected = "Plants & algae use light.\nEnergy is stored as sugar.\nChlorophyll is a pigment that captures light.";
     assert.equal(parseCaptions(await readFile(fixture("captions.xml"), "utf8"), parser), expected);
     assert.equal(parseCaptions(JSON.stringify({ events: [
       { segs: [{ utf8: "Plants & " }, { utf8: "algae use light." }] },
       {},
       { segs: [{ utf8: "Energy is stored\nas sugar." }] },
+      { segs: [{ utf8: "Chlorophyll is a pigment that captures light." }] },
     ] }), parser), expected);
     assert.equal(parseCaptions("<broken>", parser), "");
   } finally {
@@ -205,6 +206,46 @@ test("decodes YouTube XML captions to plain text before deduplication", () => {
   } finally {
     dom.window.close();
   }
+});
+
+test("YouTube capture reads MAIN-world caption tracks and keeps the video link", async (t) => {
+  const url = "https://www.youtube.com/watch?v=margin-demo";
+  const captionUrl = "https://www.youtube.com/api/timedtext?v=margin-demo&lang=en";
+  const dom = new JSDOM("<title>Light and plants</title>", { runScripts: "outside-only", url });
+  const captions = await readFile(fixture("captions.xml"), "utf8");
+  const savedGlobals = ["chrome", "DOMParser"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
+  t.after(() => {
+    dom.window.close();
+    for (const [key, descriptor] of savedGlobals) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else Reflect.deleteProperty(globalThis, key);
+    }
+  });
+  dom.window.ytInitialPlayerResponse = { captions: { playerCaptionsTracklistRenderer: {
+    captionTracks: [{ baseUrl: captionUrl, languageCode: "en" }],
+  } } };
+  globalThis.DOMParser = dom.window.DOMParser;
+  globalThis.chrome = {
+    tabs: { query: async () => [{ id: 1, url, title: dom.window.document.title }] },
+    scripting: {
+      executeScript: async ({ target, world, func }: chrome.scripting.ScriptInjection<[], unknown>) => {
+        assert.deepEqual(target, { tabId: 1 });
+        assert.equal(world, "MAIN");
+        assert.equal(func, readCaptionTracks);
+        return [{ result: dom.window.eval(`(${func})()`) }];
+      },
+    },
+  } as unknown as typeof chrome;
+  const download = t.mock.method(globalThis, "fetch", async () => new Response(captions));
+  const requestAccess = t.mock.fn(async () => false);
+  const job = await captureSource({ kind: "youtube" }, "deck", "", undefined, requestAccess);
+  assert.deepEqual(job, {
+    deckId: "deck", source: { url, title: "Light and plants" }, input: { kind: "text",
+      text: "Plants & algae use light.\nEnergy is stored as sugar.\nChlorophyll is a pigment that captures light." },
+  });
+  assert.equal(download.mock.callCount(), 1);
+  assert.equal(String(download.mock.calls[0].arguments[0]), captionUrl);
+  assert.equal(requestAccess.mock.callCount(), 0);
 });
 
 test("PDF.js extracts local text and detects a page with no text", async () => {
