@@ -6,13 +6,34 @@ function encodeTerm(text: string): string {
   return encodeURIComponent(text.replace(/[\uD800-\uDFFF]/gu, "\uFFFD")).replace(/-/gu, "%2D");
 }
 
+function encodeRange(text: string): string {
+  // CJK text may have no spaces, and Chrome requires textEnd to follow textStart.
+  const segmenter = new Intl.Segmenter(undefined, { granularity: "word" });
+  const words = [...segmenter.segment(text)].filter(({ isWordLike }) => isWordLike);
+  if (!words.length) return encodeTerm(text);
+
+  let startEnd = 0;
+  for (const { index, segment } of words.slice(0, 5)) {
+    startEnd = index + segment.length;
+    if (startEnd >= 40) break;
+  }
+
+  let endStart = text.length;
+  for (const { index } of words.slice(-5).reverse()) {
+    endStart = index;
+    if (text.length - endStart >= 40) break;
+  }
+
+  if (endStart < startEnd) return encodeTerm(text);
+  const start = text.slice(0, startEnd).trim();
+  const end = text.slice(endStart).trim();
+  return `${encodeTerm(start)},${encodeTerm(end)}`;
+}
+
 export function textFragmentUrl(url: string, selection: string): string {
   const text = normalizeAnchorText(selection);
   if (!text) return url;
-  const words = text.split(" ");
-  const range = text.length <= 200
-    ? encodeTerm(text)
-    : [words.slice(0, 5).join(" "), words.slice(-5).join(" ")].map(encodeTerm).join(",");
+  const range = text.length <= 200 ? encodeTerm(text) : encodeRange(text);
   const anchor = url.split("#")[1]?.split(":~:")[0] ?? "";
   return `${url.split("#")[0]}#${anchor}:~:text=${range}`;
 }

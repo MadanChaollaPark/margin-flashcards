@@ -39,6 +39,43 @@ function editedCard(current: Card | undefined, deck: Deck | undefined, draft: Ca
   return { ...current, ...draft, tags: draft.tags, deckId: deck.id };
 }
 
+export function planRestore(
+  localDecks: Deck[], localCardIds: Iterable<string>, decks: Deck[], cards: Card[],
+): { decks: Deck[]; cards: Card[] } {
+  const nameKey = (name: string) => name.replace(/\s+/gu, " ").trim().toLowerCase();
+  const deckIds = new Set<string>();
+  const byName = new Map<string, string>();
+  for (const deck of localDecks) {
+    deckIds.add(deck.id);
+    byName.set(nameKey(deck.name), deck.id);
+  }
+
+  const remap = new Map<string, string>();
+  const addedDecks: Deck[] = [];
+  for (const deck of decks) {
+    if (deckIds.has(deck.id)) continue;
+    const key = nameKey(deck.name);
+    const existingId = byName.get(key);
+    if (existingId !== undefined) {
+      remap.set(deck.id, existingId);
+      continue;
+    }
+    addedDecks.push(deck);
+    deckIds.add(deck.id);
+    byName.set(key, deck.id);
+  }
+
+  const cardIds = new Set(localCardIds);
+  const addedCards: Card[] = [];
+  for (const card of cards) {
+    const deckId = remap.get(card.deckId) ?? card.deckId;
+    if (cardIds.has(card.id) || !deckIds.has(deckId)) continue;
+    addedCards.push({ ...card, deckId });
+    cardIds.add(card.id);
+  }
+  return { decks: addedDecks, cards: addedCards };
+}
+
 export function createMemoryDatabase(): Database {
   const stores: { [S in Store]: Map<string, Records[S]> } = {
     cards: new Map(), decks: new Map(), reviews: new Map(), queue: new Map(),
@@ -79,18 +116,10 @@ export function createMemoryDatabase(): Database {
       for (const entry of stores.queue.values()) if (entry.job.deckId === id) stores.queue.delete(entry.id);
     },
     async restoreLibrary(decks, cards) {
-      const added = { decks: 0, cards: 0 };
-      for (const deck of decks) {
-        if (stores.decks.has(deck.id)) continue;
-        stores.decks.set(deck.id, structuredClone(deck));
-        added.decks++;
-      }
-      for (const card of cards) {
-        if (stores.cards.has(card.id) || !stores.decks.has(card.deckId)) continue;
-        stores.cards.set(card.id, structuredClone(card));
-        added.cards++;
-      }
-      return added;
+      const planned = planRestore([...stores.decks.values()], stores.cards.keys(), decks, cards);
+      for (const deck of planned.decks) stores.decks.set(deck.id, structuredClone(deck));
+      for (const card of planned.cards) stores.cards.set(card.id, structuredClone(card));
+      return { decks: planned.decks.length, cards: planned.cards.length };
     },
     async completeQueuedJob(id, cards) {
       const entry = stores.queue.get(id);
@@ -246,25 +275,13 @@ function createIndexedDatabase(): Database {
       return write(["decks", "cards"], async (transaction) => {
         const deckStore = transaction.objectStore("decks");
         const cardStore = transaction.objectStore("cards");
-        const [deckKeys, cardKeys] = await Promise.all([
-          request(deckStore.getAllKeys()), request(cardStore.getAllKeys()),
+        const [localDecks, cardKeys] = await Promise.all([
+          request<Deck[]>(deckStore.getAll()), request(cardStore.getAllKeys()),
         ]);
-        const deckIds = new Set(deckKeys);
-        const cardIds = new Set(cardKeys);
-        const added = { decks: 0, cards: 0 };
-        for (const deck of decks) {
-          if (deckIds.has(deck.id)) continue;
-          deckStore.add(deck);
-          deckIds.add(deck.id);
-          added.decks++;
-        }
-        for (const card of cards) {
-          if (cardIds.has(card.id) || !deckIds.has(card.deckId)) continue;
-          cardStore.add(card);
-          cardIds.add(card.id);
-          added.cards++;
-        }
-        return added;
+        const planned = planRestore(localDecks, cardKeys as string[], decks, cards);
+        for (const deck of planned.decks) deckStore.add(deck);
+        for (const card of planned.cards) cardStore.add(card);
+        return { decks: planned.decks.length, cards: planned.cards.length };
       }, false);
     },
     async completeQueuedJob(id, cards) {

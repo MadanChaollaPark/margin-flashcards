@@ -65,20 +65,31 @@ export async function drainQueue(
   else await drain();
 }
 
-export function startQueueDrain(process: ProcessJob, onError = console.error, onComplete?: () => void) {
+export function startQueueDrain(
+  process: ProcessJob,
+  onError = console.error,
+  onComplete?: () => void,
+  { database = db, online = () => navigator.onLine }: { database?: Database; online?: () => boolean } = {},
+) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let stopped = false;
   let draining = false;
+  // Jobs added mid-drain may have no retry timestamp to trigger another pass.
+  let rerun = false;
   async function run() {
-    if (stopped || draining) return;
+    if (stopped) return;
+    if (draining) {
+      rerun = true;
+      return;
+    }
     clearTimeout(timer);
     draining = true;
     try {
-      await drainQueue(process, () => navigator.onLine);
+      await drainQueue(process, online, database);
       onComplete?.();
-      if (stopped || !navigator.onLine) return;
+      if (stopped || !online()) return;
       const now = Date.now();
-      const entries = await db.all("queue");
+      const entries = await database.all("queue");
       const next = entries.reduce((earliest, entry) =>
         queueState(entry) === "queued" && entry.nextAttemptAt !== undefined
           ? Math.min(earliest, entry.nextAttemptAt) : earliest, Infinity);
@@ -87,6 +98,10 @@ export function startQueueDrain(process: ProcessJob, onError = console.error, on
       onError(error);
     } finally {
       draining = false;
+      if (rerun && !stopped) {
+        rerun = false;
+        void run();
+      }
     }
   }
   const drain = () => { void run(); };

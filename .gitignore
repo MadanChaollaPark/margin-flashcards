@@ -1,8 +1,32 @@
+# dependencies and build artifacts
 node_modules/
 dist/
 *.zip
 test-results/
 playwright-report/
+
+# secrets / local config — never commit
 .env
+.env.*
 firebase.config.local.json
+**/serviceAccount*.json
+**/*service-account*.json
+*.pem
+*.p12
+
+# research dumps (saved HTML can contain third-party public site keys)
 research/*.html
+research/*.htm
+
+# loop runtime (driver-owned; do not wipe, but do not publish raw logs)
+STATE/logs/
+STATE/driver.out
+STATE/runtime.json
+STATE/HEARTBEAT
+STATE/DRIVER_PID
+STATE/DRIVER_SHA256
+STATE/ALL_DONE
+__pycache__/
+*.pyc
+*.bak.*
+.DS_Store

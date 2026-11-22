@@ -1,5 +1,6 @@
 import type { InferenceSource } from "firebase/ai";
 import type { Schedule } from "../srs/fsrs";
+import { CLOZE_DELETION } from "./cloze";
 
 export const MAX_CARDS = 50;
 export const MAX_FRONT_LENGTH = 500;
@@ -57,7 +58,11 @@ export function validate(value: unknown): CardDraft | undefined {
   const question = front.trim();
   const answer = back.trim();
   if (!question || !answer || question.length > MAX_FRONT_LENGTH || answer.length > MAX_BACK_LENGTH) return;
-  if (type === "cloze" && !question.match(/\{\{c1::([^{}]+)\}\}/u)?.[1].trim()) return;
+  if (type === "cloze") {
+    const deletions = [...question.matchAll(CLOZE_DELETION)];
+    if (!deletions.some(([, index]) => index === "1")) return;
+    if (deletions.some(([, , content]) => !content.split("::", 1)[0].trim())) return;
+  }
   const cleanTags = Array.isArray(tags)
     ? cardTags(tags.filter((tag) => typeof tag === "string")).filter((tag) => tag.length <= 80).slice(0, 16)
     : [];

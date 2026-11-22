@@ -51,8 +51,10 @@ export async function generateCards(
   };
   let decision = decide(job, ctx);
   if (decision.mode === "confirm") {
-    if (!confirmCloud) return { confirm: decision.reason };
-    if (!await confirmCloud(decision.reason)) return;
+    if (job.cloudApproved !== true) {
+      if (!confirmCloud) return { confirm: decision.reason };
+      if (!await confirmCloud(decision.reason)) return;
+    }
     ctx.confirmedCloud = true;
     decision = decide(job, ctx);
   }
@@ -65,8 +67,10 @@ export async function generateCards(
   }
   if (decision.mode === "confirm") return { confirm: decision.reason };
   if (decision.mode === "queue") {
+    if (!queueIfOffline) return;
     const reason = provider instanceof MockProvider ? `Simulated — ${decision.reason}` : decision.reason;
-    return queueIfOffline ? { queued: await enqueue(job, reason) } : undefined;
+    const queuedJob = ctx.confirmedCloud ? { ...job, cloudApproved: true } : job;
+    return { queued: await enqueue(queuedJob, reason) };
   }
 
   onStage?.(decision.mode === InferenceMode.ONLY_ON_DEVICE ? "Generating on-device…" : "Generating…");

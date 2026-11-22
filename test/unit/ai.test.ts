@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { setImmediate } from "node:timers/promises";
 import { InferenceMode } from "firebase/ai";
 import { deleteApp, initializeApp } from "firebase/app";
 import { CELL_BIOLOGY_PASSAGE } from "../../src/ai/demoSamples";
@@ -7,11 +8,11 @@ import { FirebaseProvider } from "../../src/ai/firebaseProvider";
 import { MockProvider } from "../../src/ai/mockProvider";
 import { createPrompt } from "../../src/ai/prompts";
 import type { AIProvider, ContentInput, GenerationJob, InferenceRequest } from "../../src/ai/provider";
-import { drainQueue, enqueue } from "../../src/ai/queue";
+import { drainQueue, enqueue, startQueueDrain } from "../../src/ai/queue";
 import { generateCards } from "../../src/ai/runtime";
 import { isConfigured } from "../../src/firebase/config";
 import { DEFAULTS, loadRemoteConfig } from "../../src/firebase/remoteConfig";
-import { createMemoryDatabase } from "../../src/storage/db";
+import { createMemoryDatabase, db } from "../../src/storage/db";
 
 const job: GenerationJob = {
   deckId: "bio",
@@ -223,6 +224,65 @@ test("queue backs off exponentially and stops after three attempts", async () =>
   assert.equal((await database.get("queue", entry.id))?.state, "failed");
 });
 
+test("queue drain requested mid-drain runs again and picks up newly queued jobs", async (t) => {
+  const database = createMemoryDatabase();
+  await enqueue(job, "Offline.", database);
+  const secondJob = { ...job, deckId: "second" };
+  let releaseFirstJob!: () => void;
+  const firstJobGate = new Promise<void>((resolve) => { releaseFirstJob = resolve; });
+  const processed: string[] = [];
+  const onError = t.mock.fn();
+  const onComplete = t.mock.fn();
+  const controller = startQueueDrain(async (queued) => {
+    processed.push(queued.deckId);
+    if (queued.deckId === job.deckId) await firstJobGate;
+    return [];
+  }, onError, onComplete, { database, online: () => true });
+  t.after(() => { controller.stop(); releaseFirstJob(); });
+
+  await setImmediate();
+  assert.deepEqual(processed, [job.deckId]);
+  await enqueue(secondJob, "Offline.", database);
+  controller.drain();
+  controller.drain();
+  releaseFirstJob();
+  await setImmediate();
+
+  assert.deepEqual(processed, [job.deckId, secondJob.deckId]);
+  assert.deepEqual(await database.all("queue"), []);
+  assert.equal(onComplete.mock.callCount(), 2);
+  assert.equal(onError.mock.callCount(), 0);
+});
+
+test("stopping the queue drain cancels a pending rerun", async (t) => {
+  const database = createMemoryDatabase();
+  await enqueue(job, "Offline.", database);
+  let releaseFirstJob!: () => void;
+  const firstJobGate = new Promise<void>((resolve) => { releaseFirstJob = resolve; });
+  const processed: string[] = [];
+  const onError = t.mock.fn();
+  const onComplete = t.mock.fn();
+  const controller = startQueueDrain(async (queued) => {
+    processed.push(queued.deckId);
+    if (queued.deckId === job.deckId) await firstJobGate;
+    return [];
+  }, onError, onComplete, { database, online: () => true });
+  t.after(() => { controller.stop(); releaseFirstJob(); });
+
+  await setImmediate();
+  assert.deepEqual(processed, [job.deckId]);
+  const secondEntry = await enqueue({ ...job, deckId: "second" }, "Offline.", database);
+  controller.drain();
+  controller.stop();
+  releaseFirstJob();
+  await setImmediate();
+
+  assert.deepEqual(processed, [job.deckId]);
+  assert.deepEqual(await database.all("queue"), [secondEntry]);
+  assert.equal(onComplete.mock.callCount(), 1);
+  assert.equal(onError.mock.callCount(), 0);
+});
+
 test("short Auto text checks sensitivity before hybrid generation, and malformed classification stays local", async () => {
   const mock = new MockProvider();
   const calls: InferenceRequest[] = [];
@@ -303,4 +363,66 @@ test("with Nano missing, generation waits for consent before making any model ca
   const approved = await generateCards(flagged, mock, context, { confirmCloud: async () => true });
   assert.equal(approved?.cards?.[0]?.route.source, "in_cloud");
   assert.match(approved?.cards?.[0]?.route.reason ?? "", /approved cloud inference/u);
+});
+
+const flaggedJob: GenerationJob = {
+  ...job, input: { kind: "text", text: "The lab contact is student@example.invalid. Chlorophyll absorbs light in plants." },
+};
+
+test("an approval given offline is stored on the queued job and honored when the queue drains", async (t) => {
+  const provider = new MockProvider({ nano: "unavailable" });
+  const offline = { config: DEFAULTS, privacyMode: false, online: false };
+  const confirmCloud = t.mock.fn(async () => true);
+  const queued = (await generateCards(flaggedJob, provider, offline, { confirmCloud }))?.queued;
+  assert.ok(queued);
+  t.after(() => db.delete("queue", queued.id));
+  assert.equal(confirmCloud.mock.callCount(), 1);
+  assert.equal(queued.job.cloudApproved, true);
+  assert.equal(Object.hasOwn(flaggedJob, "cloudApproved"), false);
+  const stored = await db.get("queue", queued.id);
+  assert.equal(stored?.job.cloudApproved, true);
+
+  const unflagged = (await generateCards(job, provider, offline))?.queued;
+  assert.ok(unflagged);
+  t.after(() => db.delete("queue", unflagged.id));
+  const storedUnflagged = await db.get("queue", unflagged.id);
+  assert.ok(storedUnflagged);
+  assert.equal(Object.hasOwn(storedUnflagged.job, "cloudApproved"), false);
+
+  const database = createMemoryDatabase();
+  await enqueue(stored.job, stored.reason, database);
+  const online = { ...offline, online: true };
+  await drainQueue(async (pending) => {
+    const result = await generateCards(pending, provider, online, { queueIfOffline: false });
+    return result?.confirm ? { confirm: result.confirm } : result?.cards;
+  }, () => true, database);
+
+  assert.deepEqual(await database.all("queue"), []);
+  const cards = await database.all("cards");
+  assert.ok(cards.length > 0);
+  for (const card of cards) {
+    assert.equal(card.route?.source, "in_cloud");
+    assert.match(card.route.reason, /approved cloud inference/u);
+  }
+});
+
+test("a stored approval does not override privacy mode or an available Nano", async () => {
+  const approved = { ...flaggedJob, cloudApproved: true };
+  const calls: InferenceRequest[] = [];
+  const recordCalls = (mock: MockProvider): AIProvider => ({
+    status: () => mock.status(),
+    initializeDeviceModel: () => mock.initializeDeviceModel(),
+    generate: (req) => { calls.push(req); return mock.generate(req); },
+  });
+  const unavailable = recordCalls(new MockProvider({ nano: "unavailable" }));
+  const online = { config: DEFAULTS, privacyMode: false, online: true };
+  await assert.rejects(generateCards(approved, unavailable, { ...online, privacyMode: true }), /Privacy mode.*unavailable/u);
+  await assert.rejects(generateCards(approved, unavailable, { ...online, modeOverride: "only-device" }), /on-device.*unavailable/u);
+  assert.ok((await generateCards(flaggedJob, unavailable, online, { queueIfOffline: false }))?.confirm);
+  assert.equal(calls.length, 0);
+
+  const available = recordCalls(new MockProvider({ nano: "available" }));
+  const local = await generateCards(approved, available, online);
+  assert.equal(local?.cards?.[0]?.route.source, "on_device");
+  assert.deepEqual(calls.map(({ task, mode }) => [task.kind, mode]), [["cards", InferenceMode.ONLY_ON_DEVICE]]);
 });

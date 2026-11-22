@@ -77,8 +77,9 @@ async function runBackup(restore: boolean, saveToggle = false) {
     backupResult.textContent = restore ? "Restoring…" : "Backing up…";
     const response = await chrome.runtime.sendMessage({ type: restore ? "margin.restoreBackup" : "margin.backup" });
     if (!response?.result) throw new Error(response?.error || "Firestore backup failed.");
-    const { cards, decks } = response.result;
-    backupResult.textContent = `${restore ? "Restored" : "Backed up"} ${cards} ${cards === 1 ? "card" : "cards"} and ${decks} ${decks === 1 ? "deck" : "decks"}.`;
+    const { cards, decks, skipped } = response.result;
+    const skippedMessage = restore && skipped > 0 ? ` Skipped ${skipped} invalid backed-up ${skipped === 1 ? "item" : "items"}.` : "";
+    backupResult.textContent = `${restore ? "Restored" : "Backed up"} ${cards} ${cards === 1 ? "card" : "cards"} and ${decks} ${decks === 1 ? "deck" : "decks"}.${skippedMessage}`;
     if (restore) await refreshLibrary();
   } catch (error) {
     backupResult.textContent = message(error, "Firestore backup failed.");

@@ -1,5 +1,5 @@
 import type { ContentInput } from "../ai/provider";
-import { encodeBase64 } from "./image";
+import { assertInlineMediaSize, encodeBase64 } from "./image";
 
 export async function extractPdfText(bytes: Uint8Array, assetUrl?: (path: string) => string): Promise<string> {
   const { getDocument, GlobalWorkerOptions } = await import("pdfjs-dist/legacy/build/pdf.mjs");
@@ -37,5 +37,7 @@ export async function pdfInput(url: string): Promise<ContentInput> {
   }
   const text = await extractPdfText(bytes, (path) => chrome.runtime.getURL(path)).catch(() => "");
   if ((text.match(/[\p{L}\p{N}]/gu)?.length ?? 0) >= 40) return { kind: "text", text };
+  assertInlineMediaSize(bytes.byteLength,
+    "This PDF has no extractable text and is too large to send for cloud OCR (max 14 MB). Select or paste the text instead.");
   return { kind: "pdf", mimeType: "application/pdf", data: encodeBase64(bytes), text };
 }

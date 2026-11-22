@@ -26,7 +26,11 @@ export function parseCaptions(payload: string, parser = new DOMParser()): string
   } else {
     const doc = parser.parseFromString(input, "text/xml");
     lines = [...doc.querySelectorAll("transcript > text, body > p")]
-      .map((node) => node.textContent ?? "");
+      .map((node) => {
+        const text = node.textContent ?? "";
+        // YouTube timedtext XML escapes caption text twice.
+        return /[&<]/u.test(text) ? parser.parseFromString(text, "text/html").body.textContent ?? "" : text;
+      });
   }
   return lines.map((line) => line.replace(/\s+/gu, " ").trim())
     .filter((line, index, entries) => line && (index === 0 || line !== entries[index - 1])).join("\n");

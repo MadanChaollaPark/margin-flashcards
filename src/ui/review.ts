@@ -1,9 +1,9 @@
 import { InferenceSource } from "firebase/ai";
 import { checkAnswer, type CheckedAnswer } from "../ai/grade";
 import { createRuntime } from "../ai/runtime";
-import { renderFront } from "../cards/cloze";
+import { expectedAnswer, renderFront } from "../cards/cloze";
 import type { Card, Review } from "../cards/schema";
-import { dueAt, dueCards, intervalLabel, nextIntervals, nextSchedule, ratings } from "../srs/fsrs";
+import { dueAt, dueCards, intervalDescription, intervalLabel, nextIntervals, nextSchedule, ratings, requeueReviewed } from "../srs/fsrs";
 import { db } from "../storage/db";
 import { cardRouteBadge, clearNotice, element, message, notify, showDemoBanner, watchDemoBanner } from "./shared";
 
@@ -25,6 +25,7 @@ let index = 0;
 let checking = false;
 let saving = false;
 const sessionRatings = [0, 0, 0, 0];
+const reviewedCardIds = new Set<string>();
 
 function cardFront(card: Card, shown: boolean) {
   return card.type === "cloze" ? renderFront(card.front, shown) : card.front;
@@ -38,7 +39,7 @@ function showCard() {
   if (!card) {
     study.hidden = element("shortcuts").hidden = true;
     element("summary").hidden = false;
-    const count = sessionRatings.reduce((sum, value) => sum + value, 0);
+    const count = reviewedCardIds.size;
     element("summary-count").textContent = `${count} ${count === 1 ? "card" : "cards"} reviewed.`;
     const tally = element("summary-ratings");
     tally.replaceChildren(...ratings.map(([rating, label]) => {
@@ -112,6 +113,8 @@ function reveal(grade?: CheckedAnswer) {
     button.className = suggested ? "secondary suggested" : "secondary";
     button.type = "button";
     button.dataset.rating = String(rating);
+    button.setAttribute("aria-label", `${label}, ${intervalDescription(milliseconds)}`);
+    button.setAttribute("aria-keyshortcuts", String(rating));
     if (suggested) button.setAttribute("aria-description", "Suggested rating");
     button.textContent = label;
     const interval = document.createElement("span");
@@ -143,8 +146,13 @@ async function rate(rating: Review["rating"]) {
     const recorded = await db.recordReview(card, schedule, {
       id: crypto.randomUUID(), cardId: card.id, reviewedAt: now.getTime(), rating,
     });
-    if (recorded) sessionRatings[rating - 1]++;
-    else notify("This card was already handled in another tab.");
+    if (recorded) {
+      sessionRatings[rating - 1]++;
+      reviewedCardIds.add(card.id);
+      cards = requeueReviewed(cards, index, { ...card, schedule }, now.getTime());
+    } else {
+      notify("This card was already handled in another tab.");
+    }
     index++;
     showCard();
   } catch (error) {
@@ -170,7 +178,7 @@ answerForm.addEventListener("submit", async (event) => {
   try {
     const { provider, config, mock } = await createRuntime();
     showDemoBanner(mock);
-    const grade = await checkAnswer(provider, config.cloudModel, cardFront(card, false), card.back, answer);
+    const grade = await checkAnswer(provider, config.cloudModel, cardFront(card, false), expectedAnswer(card), answer);
     reveal(grade);
   } catch (error) {
     notify(message(error, "Could not check your answer."), true);

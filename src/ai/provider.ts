@@ -14,6 +14,8 @@ export interface GenerationJob {
   input: ContentInput;
   deckId: string;
   sensitive?: boolean;
+  // The user approved cloud inference for this capture's sensitive-pattern match (stored on queued jobs).
+  cloudApproved?: boolean;
   source?: Card["source"];
   anchorPage?: boolean;
 }

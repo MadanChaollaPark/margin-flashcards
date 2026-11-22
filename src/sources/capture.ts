@@ -1,5 +1,5 @@
 import type { GenerationJob } from "../ai/provider";
-import { captureImage, readImage } from "./image";
+import { captureImage, readImage, sniffImageType } from "./image";
 import { extractPage } from "./page";
 import { pdfInput } from "./pdf";
 import type { CaptureRequest } from "./request";
@@ -13,6 +13,35 @@ async function obtainAccess(url: string, purpose: string, requestAccess: Request
   if (!["http:", "https:"].includes(parsed.protocol)) return false;
   const origin = `${parsed.protocol}//${parsed.hostname}/*`;
   return !await chrome.permissions.contains({ origins: [origin] }) && await requestAccess(origin, purpose);
+}
+
+async function fetchClickedImage(url: string, requestAccess: RequestAccess): Promise<Blob | undefined> {
+  const isHttp = /^https?:/iu.test(url);
+  if (!isHttp && !/^data:image\//iu.test(url)) return;
+
+  const download = () => fetch(url, { credentials: "include" });
+  try {
+    let response: Response;
+    try {
+      response = await download();
+    } catch (error) {
+      if (!isHttp || !(error instanceof TypeError) || !await obtainAccess(url, "download this image", requestAccess)) {
+        return;
+      }
+      response = await download();
+    }
+    if (!response.ok) return;
+
+    const blob = await response.blob();
+    if (blob.type.startsWith("image/")) return blob;
+    const type = blob.type.split(";", 1)[0].trim().toLowerCase();
+    if (!["", "application/octet-stream", "binary/octet-stream"].includes(type)) return;
+
+    const sniffed = sniffImageType(new Uint8Array(await blob.slice(0, 12).arrayBuffer()));
+    return sniffed ? new Blob([blob], { type: sniffed }) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function captureSource(
@@ -77,14 +106,15 @@ export async function captureSource(
       return { deckId, source, input: text ? { kind: "text", text } : { kind: "youtube", url } };
     }
     case "image": {
-      if (request.imageUrl && /^https?:/u.test(request.imageUrl)) {
+      const blob = request.imageUrl ? await fetchClickedImage(request.imageUrl, requestAccess) : undefined;
+      if (blob) {
         try {
-          const response = await fetch(request.imageUrl, { credentials: "include" });
-          if (response.ok) return { deckId, source, input: await readImage(await response.blob()) };
-        } catch {
-          // Capture the visible tab when the image resource is inaccessible.
+          return { deckId, source, input: await readImage(blob) };
+        } catch (error) {
+          if (!(error instanceof DOMException)) throw error;
         }
       }
+      // Fall back to a visible-tab screenshot only when the clicked image cannot be read.
       return { deckId, source, input: await captureImage(tab) };
     }
   }

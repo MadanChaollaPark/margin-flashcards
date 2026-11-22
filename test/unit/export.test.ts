@@ -65,3 +65,40 @@ test("Anki package contains readable SQLite notes, cards, models and decks", asy
     database.close();
   }
 });
+
+test("Anki package has one card per cloze deletion number", async () => {
+  const twoDeletions = { ...cloze, id: "two-deletions", front: "{{c1::Paris}} is in {{c2::France}}." };
+  const gap = { ...cloze, id: "gap", front: "{{c1::a}} and {{c3::b}}" };
+  const repeated = { ...cloze, id: "repeated", front: "{{c1::Chlorophyll::pigment}} absorbs {{c1::light}}." };
+  const cards = [card, twoDeletions, gap, repeated];
+  const files = unzipSync(await buildApkg(cards, [deck]));
+  const SQL = await initSqlJs();
+  const database = new SQL.Database(files["collection.anki2"]);
+  try {
+    const [[noteCount]] = database.exec("SELECT count(*) FROM notes")[0].values;
+    assert.equal(noteCount, cards.length);
+    const rows = database.exec(`
+      SELECT notes.guid, cards.ord, cards.did, cards.due
+      FROM notes JOIN cards ON cards.nid = notes.id
+      ORDER BY cards.id
+    `)[0].values;
+    const deckId = rows[0][2];
+    assert.deepEqual(rows, [
+      [card.id, 0, deckId, 1],
+      [twoDeletions.id, 0, deckId, 2],
+      [twoDeletions.id, 1, deckId, 2],
+      [gap.id, 0, deckId, 3],
+      [gap.id, 2, deckId, 3],
+      [repeated.id, 0, deckId, 4],
+    ]);
+    const [[cardCount, uniqueIds]] = database.exec("SELECT count(*), count(DISTINCT id) FROM cards")[0].values;
+    assert.equal(uniqueIds, cardCount);
+    const [[orphans]] = database.exec("SELECT count(*) FROM cards WHERE nid NOT IN (SELECT id FROM notes)")[0].values;
+    assert.equal(orphans, 0);
+    const [[config]] = database.exec("SELECT conf FROM col")[0].values;
+    assert.equal(JSON.parse(String(config)).nextPos, cards.length + 1);
+    assert.equal(database.exec("PRAGMA integrity_check")[0].values[0][0], "ok");
+  } finally {
+    database.close();
+  }
+});

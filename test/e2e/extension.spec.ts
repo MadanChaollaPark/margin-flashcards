@@ -158,11 +158,15 @@ test("page capture reaches the panel, cards can be edited and reviewed, and both
   await expect(generationRoute.getByText(/Firebase AI Logic preferred Gemini Nano/u)).toBeVisible();
   await expect(review.locator("#user-answer")).toHaveText(answers[firstFront]);
   await expect(review.getByRole("button", { name: /^Good/u })).toHaveAttribute("aria-description", "Suggested rating");
+  await expect(review.getByRole("group", { name: "Rate this card" })).toBeVisible();
+  const goodButton = review.getByRole("button", { name: /^Good/u });
+  await expect(goodButton).toHaveAccessibleName(/^Good, \d+(\.\d+)? (minute|hour|day|month|year)s?$/u);
+  await expect(goodButton).toHaveAttribute("aria-keyshortcuts", "3");
   await review.keyboard.press("3");
-  await expect(review.getByText("1 of 3 complete")).toBeVisible();
+  await expect(review.getByText("1 of 4 complete")).toBeVisible();
   await review.keyboard.press("Space");
   await review.getByRole("button", { name: /^Easy/u }).press("Enter");
-  await expect(review.getByText("2 of 3 complete")).toBeVisible();
+  await expect(review.getByText("2 of 4 complete")).toBeVisible();
   await popup.reload();
   await expect(popup.getByText("1 card due")).toBeVisible();
 
@@ -245,6 +249,33 @@ test("page capture reaches the panel, cards can be edited and reviewed, and both
   expect(margin.errors).toEqual([]);
 });
 
+test("options reports invalid backup items skipped during restore", async ({ margin }) => {
+  const cases = [
+    { skipped: 3, expected: "Restored 1 card and 1 deck. Skipped 3 invalid backed-up items." },
+    { skipped: 1, expected: "Restored 1 card and 1 deck. Skipped 1 invalid backed-up item." },
+    { skipped: 0, expected: "Restored 1 card and 1 deck." },
+    { skipped: undefined, expected: "Restored 1 card and 1 deck." },
+  ];
+
+  for (const { skipped, expected } of cases) {
+    const options = await extensionPage(margin, "options.html");
+    const restore = options.getByRole("button", { name: "Restore from backup" });
+    await expect(restore).toBeDisabled();
+    await options.evaluate((skipped) => {
+      Object.defineProperty(chrome.runtime, "sendMessage", {
+        value: async (request: { type: string }) => {
+          if (request.type !== "margin.restoreBackup") throw new Error(`Unexpected message ${request.type}`);
+          return { result: { cards: 1, decks: 1, skipped } };
+        },
+      });
+    }, skipped);
+    // Exercise the result handler with a stubbed response while Demo mode keeps Firestore disabled.
+    await restore.dispatchEvent("click");
+    await expect(options.locator("#backup-result")).toHaveText(expected);
+    await options.close();
+  }
+});
+
 test("sensitive text stays on-device even when options request cloud inference", async ({ margin }) => {
   const options = await extensionPage(margin, "options.html");
   await options.getByLabel("Inference mode").selectOption("only-cloud");
@@ -310,14 +341,28 @@ test("offline generation queues cloud jobs and drains them after reconnecting", 
   await expect(panel.getByText("Queued", { exact: true })).toBeHidden();
   await options.reload();
   await expect(options.getByText("100%", { exact: true })).toBeVisible();
+  const otherReview = await extensionPage(margin, "review.html");
+  await expect(otherReview.getByRole("heading", { name: "What is Dendrochronology?" })).toBeVisible();
   const review = await extensionPage(margin, "review.html");
   await expect(review.getByRole("heading", { name: "What is Dendrochronology?" })).toBeVisible();
   await review.keyboard.press("Space");
   await review.keyboard.press("3");
+  await expect(review.getByText("1 of 2 complete")).toBeVisible();
+  await expect(review.getByRole("heading", { name: "What is Dendrochronology?" })).toBeVisible();
+  await review.keyboard.press("Space");
+  await review.keyboard.press("4");
   await expect(review.getByRole("heading", { name: "Session complete" })).toBeVisible();
+  await expect(review.getByText("1 card reviewed.")).toBeVisible();
+  await expect(review.locator("#summary-ratings dd")).toHaveText(["0", "0", "1", "1"]);
   await review.reload();
   await expect(review.getByRole("heading", { name: "All caught up" })).toBeVisible();
   await expect(review.getByText(/^Next review /u)).toBeVisible();
+
+  await otherReview.keyboard.press("Space");
+  await otherReview.keyboard.press("3");
+  await expect(otherReview.getByText("This card was already handled in another tab.")).toBeVisible();
+  await expect(otherReview.getByRole("heading", { name: "Session complete" })).toBeVisible();
+  await expect(otherReview.getByText("0 cards reviewed.")).toBeVisible();
   expect(margin.errors).toEqual([]);
 });
 

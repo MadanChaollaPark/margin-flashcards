@@ -61,8 +61,10 @@ flowchart LR
 | Long text | Prefer the long-document cloud model when online in Auto. Split into local chunks if Nano is ready and the capture is offline, private, or set to Prefer on-device. Chunks overlap by about 10% at sentence boundaries where possible. Margin deduplicates cards across chunks. |
 | Scanned PDF or video without accessible captions | Use the long-document cloud model. Margin extracts readable PDF text or captions locally when available. |
 | Nano unavailable for a cloud-eligible capture | Use the cloud when online. Downloadable and downloading states point to **Enable on-device AI**. |
-| Cloud needed while offline | Queue the capture locally. Keep the side panel open for automatic retries when you're online. It reroutes on reconnect and retries failures with 30-second and 60-second delays. After three failed attempts, the entry shows **Failed** with a manual retry in Options. |
+| Cloud needed while offline | Queue the capture locally. Cloud approval given offline stays with that capture. Keep the side panel open for automatic retries when you're online. It reroutes on reconnect and retries failures with 30-second and 60-second delays. After three failed attempts, the entry shows **Failed** with a manual retry in Options. |
 | Typed answer during review | Check with Nano only. Manual reveal and self-rating are always available. |
+
+Margin can send up to 14 MB of raw media per capture for images, screenshots, and PDFs without extractable text.
 
 The sensitivity gate combines patterns with local text classification on eligible cloud routes when Nano is available. A malformed classification is treated as sensitive. In the side panel, expand **AI routing explained** to see the active input budget, models, sensitivity setting, and cards per chunk.
 
@@ -108,13 +110,13 @@ Open **Options → Diagnostics** to check the Chrome version, Prompt API, curren
 
 1. In the same Firebase project, enable the **Anonymous** sign-in provider under **Authentication → Sign-in method**. [Anonymous Authentication setup](https://firebase.google.com/docs/auth/web/anonymous-auth)
 2. Create a Cloud Firestore database and publish [firestore.rules](firestore.rules) in its **Rules** tab. The rules limit access under each user path to that user's authenticated UID. [Firestore Security Rules](https://firebase.google.com/docs/firestore/security/rules-conditions)
-3. In **Options → Firestore backup**, turn on **Back up decks to Firestore**. Margin signs in anonymously and backs up the library when enabled and after local card or deck changes. Use **Back up now** to retry. Backup and restore are paused in Demo mode and Privacy mode.
+3. In **Options → Firestore backup**, turn on **Back up decks to Firestore**. Margin signs in anonymously and backs up the library when enabled and after local card or deck changes. Use **Back up now** to retry. Automatic backups upload only changed decks and cards, and **Back up now** uploads everything. Backup and restore are paused in Demo mode and Privacy mode.
 
 The background service worker logs its App Check debug token on its first backup attempt. Find its console from the **service worker** link on Margin's card in `chrome://extensions`.
 
 Firestore stores decks under `users/{uid}/decks/{deckId}` and cards under `users/{uid}/cards/{cardId}`. Card documents contain the front, back, tags, deck ID, card type, creation time, and FSRS schedule. Captured source text, source links, routing history, and review logs stay out of the backup.
 
-**Restore from backup** adds missing decks and cards while preserving local copies with matching IDs. Local deletions remain in existing backups and can reappear on restore. The anonymous account is tied to this Chrome profile and extension ID. Clearing its extension data or switching profiles can leave the backup inaccessible.
+**Restore from backup** adds missing decks and cards while preserving local copies with matching IDs. Backed-up decks merge into local decks whose names match after ignoring case and extra whitespace. Backed-up decks or cards that fail validation are skipped, and the restore reports how many were skipped. Local deletions remain in existing backups and can reappear on restore. The anonymous account is tied to this Chrome profile and extension ID. Clearing its extension data or switching profiles can leave the backup inaccessible.
 
 ## Scripts
 

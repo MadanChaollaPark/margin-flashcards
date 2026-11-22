@@ -1,5 +1,6 @@
 import { strToU8, zipSync } from "fflate";
 import initSqlJs from "sql.js";
+import { CLOZE_DELETION } from "../cards/cloze";
 import type { Card, Deck } from "../cards/schema";
 import { fieldHtml } from "./tsv";
 import { cardTags } from "../cards/schema";
@@ -72,6 +73,15 @@ async function checksum(text: string): Promise<number> {
   return new DataView(hash).getUint32(0);
 }
 
+function cardOrdinals(card: Card): number[] {
+  if (card.type === "basic") return [0];
+  const ordinals = new Set<number>();
+  for (const [, number] of card.front.matchAll(CLOZE_DELETION)) {
+    ordinals.add(Number(number) - 1);
+  }
+  return ordinals.size ? [...ordinals].sort((a, b) => a - b) : [0];
+}
+
 let sql: ReturnType<typeof initSqlJs> | undefined;
 
 export async function buildApkg(cards: Card[], decks: Deck[]): Promise<Uint8Array> {
@@ -112,16 +122,20 @@ export async function buildApkg(cards: Card[], decks: Deck[]): Promise<Uint8Arra
     ]);
     database.run("BEGIN");
     const note = database.prepare("INSERT INTO notes VALUES (?, ?, ?, ?, -1, ?, ?, ?, ?, 0, '')");
-    const row = database.prepare("INSERT INTO cards VALUES (?, ?, ?, 0, ?, -1, 0, 0, ?, 0, 0, 0, 0, 0, 0, 0, 0, '')");
+    const row = database.prepare("INSERT INTO cards VALUES (?, ?, ?, ?, ?, -1, 0, 0, ?, 0, 0, 0, 0, 0, 0, 0, 0, '')");
     try {
+      let cardId = now;
       cards.forEach((card, index) => {
-        const id = now + index;
+        const noteId = now + index;
         const tags = cardTags(card.tags);
         note.run([
-          id, card.id, card.type === "cloze" ? clozeId : basicId, mod, tags.length ? ` ${tags.join(" ")} ` : "",
+          noteId, card.id, card.type === "cloze" ? clozeId : basicId, mod, tags.length ? ` ${tags.join(" ")} ` : "",
           `${fieldHtml(card.front)}\x1f${fieldHtml(card.back)}`, card.front, checksums[index],
         ]);
-        row.run([id, id, deckIds.get(card.deckId) ?? 1, mod, index + 1]);
+        const deckId = deckIds.get(card.deckId) ?? 1;
+        for (const ordinal of cardOrdinals(card)) {
+          row.run([cardId++, noteId, deckId, ordinal, mod, index + 1]);
+        }
       });
     } finally {
       note.free();
