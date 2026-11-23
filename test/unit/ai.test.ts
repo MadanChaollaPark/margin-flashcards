@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test, type TestContext } from "node:test";
 import { setImmediate } from "node:timers/promises";
 import { InferenceMode } from "firebase/ai";
 import { deleteApp, initializeApp } from "firebase/app";
@@ -13,6 +13,7 @@ import { generateCards } from "../../src/ai/runtime";
 import { isConfigured } from "../../src/firebase/config";
 import { DEFAULTS, loadRemoteConfig } from "../../src/firebase/remoteConfig";
 import { createMemoryDatabase, db } from "../../src/storage/db";
+import type { Settings } from "../../src/storage/settings";
 
 const job: GenerationJob = {
   deckId: "bio",
@@ -164,17 +165,20 @@ test("the offline queue retains failures and atomically saves cards on retry", a
   const database = createMemoryDatabase();
   const entry = await enqueue(job, "Offline.", database);
   let runs = 0;
-  await drainQueue(async () => { runs++; return []; }, () => false, database);
+  await drainQueue(() => ({ mode: "live", async process() { runs++; return []; } }), () => false, database);
   assert.equal(runs, 0);
 
-  await drainQueue(async () => { throw new Error("Try again."); }, () => true, database);
+  await drainQueue(() => ({ mode: "live", async process() { throw new Error("Try again."); } }), () => true, database);
   assert.equal((await database.get("queue", entry.id))?.lastError, "Try again.");
   assert.equal((await database.get("queue", entry.id))?.attempts, 1);
 
-  await drainQueue(async (queued) => {
-    const result = await generateCards(queued, new MockProvider(), { config: DEFAULTS, online: true, privacyMode: false });
-    return result?.cards;
-  }, () => true, database, undefined, () => Date.now() + 30_000);
+  await drainQueue(() => ({
+    mode: "live",
+    async process(queued) {
+      const result = await generateCards(queued, new MockProvider(), { config: DEFAULTS, online: true, privacyMode: false });
+      return result?.cards;
+    },
+  }), () => true, database, undefined, () => Date.now() + 30_000);
 
   assert.equal(await database.get("queue", entry.id), undefined);
   assert.equal((await database.all("cards")).length, 2);
@@ -187,7 +191,7 @@ test("automatic live drain leaves Demo captures unchanged", async (t) => {
   await database.put("queue", pending);
   const process = t.mock.fn(async () => []);
 
-  await drainQueue(process, () => true, database, undefined, () => 1_000, "live");
+  await drainQueue(() => ({ process, mode: "live" }), () => true, database, undefined, () => 1_000);
 
   assert.equal(process.mock.callCount(), 0);
   assert.deepEqual(await database.get("queue", entry.id), pending);
@@ -198,7 +202,7 @@ test("automatic Demo drain leaves live captures unchanged", async (t) => {
   const entry = await enqueue(job, "Offline.", database, "live");
   const process = t.mock.fn(async () => []);
 
-  await drainQueue(process, () => true, database, undefined, Date.now, "demo");
+  await drainQueue(() => ({ process, mode: "demo" }), () => true, database);
 
   assert.equal(process.mock.callCount(), 0);
   assert.deepEqual(await database.get("queue", entry.id), entry);
@@ -212,8 +216,8 @@ test("manual retries in the other mode update only the queue error", async (t) =
   const live = await enqueue(job, "Offline.", database, "live");
   const process = t.mock.fn(async () => []);
 
-  await drainQueue(process, () => true, database, demo.id, Date.now, "live");
-  await drainQueue(process, () => true, database, live.id, Date.now, "demo");
+  await drainQueue(() => ({ process, mode: "live" }), () => true, database, demo.id);
+  await drainQueue(() => ({ process, mode: "demo" }), () => true, database, live.id);
 
   assert.equal(process.mock.callCount(), 0);
   assert.deepEqual(await database.get("queue", demo.id), {
@@ -224,14 +228,111 @@ test("manual retries in the other mode update only the queue error", async (t) =
   });
 });
 
+const onlyCloudSettings = { privacyMode: false, modeOverride: "only-cloud", mock: false } as const;
+type RetrySettings = Pick<Settings, "privacyMode" | "modeOverride" | "mock">;
+
+function queuedGeneration(t: TestContext, getSettings: () => RetrySettings) {
+  const mock = new MockProvider();
+  const generate = t.mock.fn((req: InferenceRequest) => mock.generate(req));
+  const status = t.mock.fn(() => mock.status());
+  const provider: AIProvider = { generate, status, initializeDeviceModel: () => mock.initializeDeviceModel() };
+  const prepare = t.mock.fn(() => {
+    const { mock, ...context } = getSettings();
+    return {
+      mode: mock ? "demo" as const : "live" as const,
+      async process(pending: GenerationJob) {
+        const result = await generateCards(pending, provider, { ...context, config: DEFAULTS, online: true },
+          { queueIfOffline: false });
+        return result?.cards;
+      },
+    };
+  });
+  return { prepare, generate, status };
+}
+
+for (const { name, change } of [
+  { name: "Privacy mode enabled", change: { privacyMode: true } },
+  { name: "Only on-device selected", change: { modeOverride: "only-device" } },
+  { name: "Demo mode enabled", change: { mock: true } },
+] satisfies { name: string; change: Partial<RetrySettings> }[]) {
+  test(`manual retry honors ${name} while waiting for the queue lock`, async (t) => {
+    const database = createMemoryDatabase();
+    const entry = await enqueue(job, "Offline.", database, "live");
+    const pending = { ...entry, attempts: 2, nextAttemptAt: Date.now() + 60_000 };
+    await database.put("queue", pending);
+    let settings: RetrySettings = onlyCloudSettings;
+    const { prepare, generate, status } = queuedGeneration(t, () => settings);
+
+    let release!: () => void;
+    const lockGate = new Promise<void>((resolve) => { release = resolve; });
+    const request = t.mock.fn(async (name: string, drain: () => Promise<unknown>) => {
+      assert.equal(name, "margin-offline-queue");
+      await lockGate;
+      return drain();
+    });
+    t.mock.getter(globalThis, "navigator", () => ({ locks: { request } }) as unknown as Navigator);
+    const retry = drainQueue(prepare, () => true, database, entry.id);
+    try {
+      assert.equal(request.mock.callCount(), 1);
+      assert.equal(prepare.mock.callCount(), 0);
+      settings = { ...settings, ...change };
+    } finally {
+      release();
+      await retry;
+    }
+
+    assert.equal(prepare.mock.callCount(), 1);
+    if (settings.mock) {
+      assert.equal(status.mock.callCount(), 0);
+      assert.equal(generate.mock.callCount(), 0);
+      assert.deepEqual(await database.get("queue", entry.id), {
+        ...pending, lastError: "Queued in live mode. Turn Demo mode off to retry, or remove it.",
+      });
+      return;
+    }
+    assert.deepEqual(generate.mock.calls.map(({ arguments: [req] }) => req.mode), [InferenceMode.ONLY_ON_DEVICE]);
+    assert.equal(await database.get("queue", entry.id), undefined);
+    assert.equal((await database.all("cards"))[0]?.route?.source, "on_device");
+  });
+}
+
+test("automatic drain uses updated settings for the second capture in the same pass", async (t) => {
+  const database = createMemoryDatabase();
+  const first = await enqueue(job, "Offline.", database, "live");
+  const second = await enqueue({ ...job, deckId: "second" }, "Offline.", database, "live");
+  await database.put("queue", { ...second, createdAt: first.createdAt + 1 });
+  let settings: RetrySettings = onlyCloudSettings;
+  const { prepare, generate } = queuedGeneration(t, () => settings);
+  const complete = database.completeQueuedJob;
+  t.mock.method(database, "completeQueuedJob", async (...args: Parameters<typeof complete>) => {
+    await complete(...args);
+    if (args[0] === first.id) settings = { ...settings, privacyMode: true };
+  });
+  const onError = t.mock.fn();
+  const onComplete = t.mock.fn();
+  const controller = startQueueDrain(prepare, onError, onComplete, { database, online: () => true });
+  t.after(controller.stop);
+  await setImmediate();
+
+  assert.equal(onError.mock.callCount(), 0);
+  assert.equal(onComplete.mock.callCount(), 1);
+  assert.equal(prepare.mock.callCount(), 2);
+  const cardRequests = generate.mock.calls.map(({ arguments: [req] }) => req).filter((req) => req.task.kind === "cards");
+  assert.deepEqual(cardRequests.map((req) => req.mode), [InferenceMode.ONLY_IN_CLOUD, InferenceMode.ONLY_ON_DEVICE]);
+  assert.deepEqual(await database.all("queue"), []);
+});
+
 test("a matching Demo drain saves cards and removes the queued capture", async () => {
   const database = createMemoryDatabase();
   const entry = await enqueue(job, "Simulated — Offline.", database, "demo");
 
-  await drainQueue(async (pending) => {
-    const result = await generateCards(pending, new MockProvider(), { config: DEFAULTS, online: true, privacyMode: false });
-    return result?.cards;
-  }, () => true, database, undefined, Date.now, "demo");
+  await drainQueue(() => ({
+    mode: "demo",
+    async process(pending) {
+      const result = await generateCards(pending, new MockProvider(), { config: DEFAULTS, online: true, privacyMode: false });
+      return result?.cards;
+    },
+  }), () => true, database);
 
   assert.equal(await database.get("queue", entry.id), undefined);
   assert.equal((await database.all("cards")).length, 2);
@@ -247,7 +348,7 @@ test("legacy entries infer Demo mode from the simulated reason prefix", async (t
   assert.equal(queuedMode({ ...demo, mode: "live" }), "live");
   const process = t.mock.fn(async () => []);
 
-  await drainQueue(process, () => true, database, undefined, Date.now, "live");
+  await drainQueue(() => ({ process, mode: "live" }), () => true, database);
 
   assert.equal(process.mock.callCount(), 1);
   assert.deepEqual(await database.all("queue"), [demo]);
@@ -266,10 +367,13 @@ test("offline Only cloud capture saves simulated cloud cards on reconnect in the
   const database = createMemoryDatabase();
   await database.put("queue", stored);
 
-  await drainQueue(async (pending) => {
-    const result = await generateCards(pending, provider, { ...offline, online: true }, { queueIfOffline: false });
-    return result?.cards;
-  }, () => true, database, undefined, Date.now, "demo");
+  await drainQueue(() => ({
+    mode: "demo",
+    async process(pending) {
+      const result = await generateCards(pending, provider, { ...offline, online: true }, { queueIfOffline: false });
+      return result?.cards;
+    },
+  }), () => true, database);
 
   assert.deepEqual(await database.all("queue"), []);
   const cards = await database.all("cards");
@@ -305,10 +409,13 @@ test("queue backs off exponentially and stops after three attempts", async () =>
   const entry = await enqueue(job, "Offline.", database);
   let time = 1_000;
   let attempts = 0;
-  const run = () => drainQueue(async () => {
-    attempts++;
-    throw new Error("Service unavailable.");
-  }, () => true, database, undefined, () => time);
+  const run = () => drainQueue(() => ({
+    mode: "live",
+    async process() {
+      attempts++;
+      throw new Error("Service unavailable.");
+    },
+  }), () => true, database, undefined, () => time);
   await run();
   assert.equal((await database.get("queue", entry.id))?.nextAttemptAt, time + 30_000);
   time += 29_999;
@@ -323,6 +430,65 @@ test("queue backs off exponentially and stops after three attempts", async () =>
   await run();
   assert.equal(attempts, 3);
   assert.equal((await database.get("queue", entry.id))?.state, "failed");
+});
+
+test("automatic drain retries runtime setup with backoff without another event", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000 });
+  const database = createMemoryDatabase();
+  const entry = await enqueue(job, "Offline.", database, "live");
+  const demo = await enqueue(job, "Simulated — Offline.", database, "demo");
+  const setupError = new Error("Settings unavailable.");
+  let failures = 2;
+  const process = t.mock.fn(async () => []);
+  const onError = t.mock.fn();
+  const controller = startQueueDrain(async () => {
+    if (failures-- > 0) throw setupError;
+    return { mode: "live", process };
+  }, onError, undefined, { database, online: () => true });
+  t.after(controller.stop);
+  await setImmediate();
+  assert.deepEqual(onError.mock.calls.map(({ arguments: args }) => args), [[setupError]]);
+  assert.deepEqual(await database.all("queue"), [entry, demo]);
+
+  t.mock.timers.tick(29_999);
+  await setImmediate();
+  assert.equal(onError.mock.callCount(), 1);
+  t.mock.timers.tick(1);
+  await setImmediate();
+  assert.equal(onError.mock.callCount(), 2);
+  assert.equal(process.mock.callCount(), 0);
+  assert.deepEqual(await database.all("queue"), [entry, demo]);
+
+  t.mock.timers.tick(59_999);
+  await setImmediate();
+  assert.equal(process.mock.callCount(), 0);
+  t.mock.timers.tick(1);
+  await setImmediate();
+  assert.equal(process.mock.callCount(), 1);
+  assert.equal(onError.mock.callCount(), 2);
+  assert.deepEqual(await database.all("queue"), [demo]);
+});
+
+test("automatic drain schedules a matching capture that is already in backoff", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_000 });
+  const database = createMemoryDatabase();
+  const entry = await enqueue(job, "Offline.", database, "live");
+  const pending = { ...entry, attempts: 1, nextAttemptAt: 31_000 };
+  await database.put("queue", pending);
+  const process = t.mock.fn(async () => []);
+  const onError = t.mock.fn();
+  const controller = startQueueDrain(() => ({ mode: "live", process }), onError,
+    undefined, { database, online: () => true });
+  t.after(controller.stop);
+  await setImmediate();
+  assert.equal(process.mock.callCount(), 0);
+  assert.deepEqual(await database.get("queue", entry.id), pending);
+
+  t.mock.timers.tick(30_000);
+  await setImmediate();
+  assert.equal(process.mock.callCount(), 1);
+  assert.equal(onError.mock.callCount(), 0);
+  assert.equal(await database.get("queue", entry.id), undefined);
 });
 
 test("automatic retries only schedule timers for captures in the current mode", async (t) => {
@@ -528,10 +694,13 @@ test("an approval given offline is stored on the queued job and honored when the
   const database = createMemoryDatabase();
   await enqueue(stored.job, stored.reason, database);
   const online = { ...offline, online: true };
-  await drainQueue(async (pending) => {
-    const result = await generateCards(pending, provider, online, { queueIfOffline: false });
-    return result?.confirm ? { confirm: result.confirm } : result?.cards;
-  }, () => true, database);
+  await drainQueue(() => ({
+    mode: "demo",
+    async process(pending) {
+      const result = await generateCards(pending, provider, online, { queueIfOffline: false });
+      return result?.confirm ? { confirm: result.confirm } : result?.cards;
+    },
+  }), () => true, database);
 
   assert.deepEqual(await database.all("queue"), []);
   const cards = await database.all("cards");

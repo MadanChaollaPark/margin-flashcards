@@ -240,13 +240,18 @@ async function refreshQueue() {
       retry.disabled = remove.disabled = true;
       retry.textContent = "Retrying…";
       try {
-        const current = await createRuntime();
-        await drainQueue(async (pending) => {
-          const result = await generateCards(pending, current.provider, { ...current, online: navigator.onLine }, {
-            queueIfOffline: false, confirmCloud: (reason) => ask("cloud-dialog", reason),
-          });
-          return result?.cards;
-        }, () => navigator.onLine, db, entry.id, Date.now, current.mock ? "demo" : "live");
+        await drainQueue(async () => {
+          const current = await createRuntime();
+          return {
+            mode: current.mock ? "demo" : "live",
+            async process(pending) {
+              const result = await generateCards(pending, current.provider, { ...current, online: navigator.onLine }, {
+                queueIfOffline: false, confirmCloud: (reason) => ask("cloud-dialog", reason),
+              });
+              return result?.cards;
+            },
+          };
+        }, () => navigator.onLine, db, entry.id);
         void chrome.runtime.sendMessage({ type: "margin.queueChanged" }).catch(() => {});
         const remaining = await db.get("queue", entry.id);
         if (remaining) notify(remaining.lastError ?? "This capture is still queued.", true);

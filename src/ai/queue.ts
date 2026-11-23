@@ -35,25 +35,30 @@ export async function enqueue(job: GenerationJob, reason: string, database = db,
 }
 
 type ProcessJob = (job: GenerationJob) => Promise<Card[] | { confirm: string } | undefined>;
+type DrainContext = { process: ProcessJob; mode: QueueMode };
 
 export async function drainQueue(
-  process: ProcessJob,
+  prepare: () => DrainContext | undefined | Promise<DrainContext | undefined>,
   online: () => boolean,
   database: Database = db,
   onlyId?: string,
   now = Date.now,
-  mode?: QueueMode,
-): Promise<void> {
+): Promise<QueueMode | undefined> {
   const drain = async () => {
     if (!online()) return;
     const entries = (await database.all("queue")).filter((entry) => onlyId
       ? entry.id === onlyId
-      : queueState(entry) === "queued" && (entry.nextAttemptAt ?? 0) <= now());
+      : queueState(entry) === "queued");
     entries.sort((first, second) => first.createdAt - second.createdAt);
+    let mode: QueueMode | undefined;
     for (const entry of entries) {
-      if (!online()) break;
+      if (!onlyId && (entry.nextAttemptAt ?? 0) > now()) continue;
+      if (!online()) return;
+      const context = await prepare();
+      if (!context || !online()) return;
+      mode = context.mode;
       const capturedMode = queuedMode(entry);
-      if (mode && capturedMode !== mode) {
+      if (capturedMode !== mode) {
         if (onlyId) {
           const lastError = capturedMode === "demo"
             ? "Queued in Demo mode. Turn Demo mode on to retry, or remove it."
@@ -63,7 +68,7 @@ export async function drainQueue(
         continue;
       }
       try {
-        const result = await process(entry.job);
+        const result = await context.process(entry.job);
         if (result === undefined) continue;
         if (Array.isArray(result)) await database.completeQueuedJob(entry.id, result);
         else await database.updateQueuedJob({ ...entry, state: "confirm", lastError: result.confirm });
@@ -77,14 +82,15 @@ export async function drainQueue(
         });
       }
     }
+    // A pass with only delayed jobs still needs the active mode for its timer.
+    if (!mode && !onlyId && online() && entries.length) return (await prepare())?.mode;
+    return mode;
   };
 
   // Extension pages share this lock and cannot drain the same job concurrently.
-  if (globalThis.navigator?.locks) await navigator.locks.request("margin-offline-queue", drain);
-  else await drain();
+  if (globalThis.navigator?.locks) return navigator.locks.request("margin-offline-queue", drain);
+  return drain();
 }
-
-type DrainContext = { process: ProcessJob; mode: QueueMode };
 
 export function startQueueDrain(
   prepare: () => DrainContext | Promise<DrainContext>,
@@ -93,6 +99,7 @@ export function startQueueDrain(
   { database = db, online = () => navigator.onLine }: { database?: Database; online?: () => boolean } = {},
 ) {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let setupRetryDelay = INITIAL_BACKOFF_MS;
   let stopped = false;
   let draining = false;
   // Jobs added mid-drain may have no retry timestamp to trigger another pass.
@@ -106,22 +113,34 @@ export function startQueueDrain(
     clearTimeout(timer);
     draining = true;
     try {
-      if (!online() || !(await database.all("queue")).some((entry) => queueState(entry) === "queued")) {
-        onComplete?.();
+      // A new request can follow a settings change while the current pass is running.
+      const active = () => !stopped && !rerun && online();
+      let setupFailed = false;
+      const mode = await drainQueue(async () => {
+        try {
+          return await prepare();
+        } catch (error) {
+          setupFailed = true;
+          onError(error);
+          return undefined;
+        }
+      }, active, database);
+      onComplete?.();
+      if (!active()) return;
+      if (setupFailed) {
+        // Without a resolved mode, a setup failure must leave the entries untouched.
+        timer = setTimeout(drain, setupRetryDelay);
+        setupRetryDelay = INITIAL_BACKOFF_MS * 2;
         return;
       }
-      const { process, mode } = await prepare();
-      // A new request can follow a settings change while the current pass is running.
-      await drainQueue((job) => stopped || rerun ? Promise.resolve(undefined) : process(job), online, database,
-        undefined, Date.now, mode);
-      onComplete?.();
-      if (stopped || !online()) return;
+      setupRetryDelay = INITIAL_BACKOFF_MS;
+      if (!mode) return;
       const now = Date.now();
       const entries = await database.all("queue");
       const next = entries.reduce((earliest, entry) =>
         queuedMode(entry) === mode && queueState(entry) === "queued" && entry.nextAttemptAt !== undefined
           ? Math.min(earliest, entry.nextAttemptAt) : earliest, Infinity);
-      if (!stopped && Number.isFinite(next)) timer = setTimeout(drain, Math.max(1_000, next - now));
+      if (active() && Number.isFinite(next)) timer = setTimeout(drain, Math.max(1_000, next - now));
     } catch (error) {
       onError(error);
     } finally {

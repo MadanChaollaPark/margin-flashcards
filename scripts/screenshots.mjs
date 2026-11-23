@@ -177,7 +177,7 @@ async function renderCover(page) {
     <main>
       <img class="logo" alt="" src="data:image/svg+xml;base64,${logo}">
       <h1>Margin</h1>
-      <p><strong>Learn what you read.</strong> Sensitive-looking text stays on-device unless you approve cloud.</p>
+      <p><strong>Learn what you read.</strong> Privacy mode keeps every capture on-device.</p>
       <ul><li class="device">On-device · Gemini Nano</li><li class="cloud">Cloud · Gemini</li><li class="private">Kept local</li></ul>
     </main>
     <img class="screenshot panel" alt="Margin side panel with generated flashcards" src="data:image/png;base64,${panel}">

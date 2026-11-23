@@ -1,4 +1,4 @@
-# iter03 review
+# iter04 review
 
 ## Verdict: FAIL
 
@@ -10,128 +10,123 @@ Reviewer verdict: FAIL (agreement on attempt 2). Driver verdict: FAIL (agreement
 
 ## Kiro Opus 5.5 evidence (FAIL)
 
-# Round 3 review of Margin (reconciliation attempt 2)
+The key claim to verify is the deleted-deck regression. Let me look at the queue diff and the baseline.
 
-The verdict is FAIL because this round's diff introduces a privacy-gate regression in the Options manual retry. The driver ran all three required suites this round, and all three exited 0. PASS would still be out of reach without the regression, because the public repo, the native Chrome walkthrough and live inference remain unverified.
 
-I checked the peer review's two regression claims against the code myself, without relying on its diagnostics.
 
-1. **Options retry can use outdated settings (regression, high).** I confirmed this one.
-   - At HEAD `2be3a56`, the Options retry called `createRuntime()` inside the per-job callback. That callback runs only after `drainQueue` holds the `margin-offline-queue` Web Lock.
-   - This round moves `const current = await createRuntime();` ahead of `drainQueue(...)` (`src/ui/options.ts:243`). Settings are now read before the lock wait.
-   - If the side panel is draining other jobs while the retry waits, a change made on the same Options page is ignored. That page keeps the Privacy toggle (`options.ts:98`) enabled during "Retrying…", because only the Retry and Remove buttons are disabled.
-   - So a retry that started under **Only cloud** with Privacy off still routes to the cloud after the user turns Privacy mode on. The same stale snapshot also breaks this round's Demo/live isolation if Demo mode is toggled during the wait.
-   - The side panel's automatic drain has the same ordering (`prepare()` runs before the lock, `queue.ts:113`). It is protected: its storage listener now calls `retryQueue()`, which sets `rerun`, and the wrapper at `queue.ts:115` then returns `undefined` instead of processing. Options has no such guard.
-2. **Automatic retry stops after a setup error (real, low severity).** I confirmed the code path.
-   - At HEAD, an error thrown by `createRuntime()` was caught per job. The job recorded an attempt and got a backoff timestamp.
-   - Now `prepare()` throws into the outer `catch` at `queue.ts:125`. That calls `onError`, schedules no timer, and leaves the job at attempt 0 until another event triggers a drain.
-   - In practice this is hard to reach. `shouldUseMock` falls back to Demo mode when no config is present, and `loadRemoteConfig` catches its own errors. That leaves only `chrome.storage` or App Check initialization failures.
-   - It still contradicts the README's retry description (README:65). I count it as secondary to finding 1.
 
-The rest of the queue work is correct and tested:
-- New captures store their Demo or live mode, and legacy entries infer it from the `Simulated — ` reason prefix.
-- An automatic pass skips captures from the other mode without writing to them.
-- A targeted retry of a capture from the other mode writes the exact mismatch notice and keeps its attempts.
-- The retry timer ignores captures from the other mode.
+
+
+
+# Round 4 review (Opus, reconciliation attempt 2)
+
+The round fails because of one regression I reproduced myself. If a capture's queue entry is deleted while the runtime is still being prepared, the capture is still sent to the provider. All three required suites passed in the driver's runs.
+
+## Regression: deleted queued captures can still be dispatched
+
+- **What changed.** In Round 3 (`260842c`), `startQueueDrain` called `prepare()` before `drainQueue` took its queue snapshot. In Round 4, `drainQueue` takes the snapshot first and only then awaits `prepare()` for each entry (`src/ai/queue.ts:49-60`). It never re-reads the entry before calling `context.process(entry.job)`. `prepare()` runs `createRuntime()`, which awaits `loadRemoteConfig`. That gives a real window for a deletion to land.
+- **Deletions don't share the queue lock.** Options deletes a deck under the `margin-decks` lock (`src/ui/options.ts:144`). It removes a single queued capture with no lock at all (`src/ui/options.ts:268`). Neither waits for `margin-offline-queue`.
+- **The existing guard runs too late.** `completeQueuedJob` and `updateQueuedJob` both check that the entry still exists (`src/storage/db.ts:287`, `:303`). So no cards are saved and the deleted entry doesn't come back. But both checks run after inference, so the source text has already gone to the provider. With Only cloud selected, that means the cloud.
+- **My reproduction.** I wrote a temporary synthetic `node:test` file using `createMemoryDatabase`, `enqueue` and `drainQueue`. It held `prepare()` open, deleted the entry, then released `prepare()`. The process function was still called once (`process calls after deletion: 1`). I deleted the file afterwards. Reading the baseline code shows the Round 3 ordering would have made zero calls in this case.
+- This matches the peer review's finding. I reached it from the code and my own run.
+
+A second, related gap: `createRuntime()` reads settings before awaiting Remote Config (`src/ai/runtime.ts:17-20`). The Options retry also keeps that snapshot through the `confirmCloud` dialog. A Privacy, Only on-device or Demo change made in that window can still be stale when the request is sent. This is narrower than the regression. It does make the story's line "Privacy mode keeps every capture on-device" an absolute claim the code doesn't fully guarantee.
 
 ## Test evidence
 
 | Suite | Runner | Exit | Result |
 |---|---|---:|---|
-| `npx tsc --noEmit` | Driver | 0 | `iter03_typecheck_tests.txt`: `EXIT=0` |
-| `npm test` | Driver | 0 | `iter03_unit_tests.txt`: 116 tests, 116 passed; 0 failed, cancelled, skipped or todo |
-| `npm run test:e2e` | Driver | 0 | `iter03_e2e_tests.txt`: build plus `10 passed (28.8s)` against the loaded extension |
-| tsc / unit / e2e on baseline `2be3a56` | Orchestrator | 0 / 0 / 0 | 109 unit and 10 e2e passed (`CHECKLIST.md:5`) |
-| tsc / unit | Builder | 0 / 0 | 116 cases with `--test-isolation=none`. The first `npm test` invocation lost its output, and the report does not give its exit code. Builder did not run e2e (sandbox limit, as the plan directed). |
+| `npx tsc --noEmit` | Driver, Round 4 | 0 | No diagnostics (`STATE/logs/iter04_typecheck_tests.txt`) |
+| `npm test` | Driver, Round 4 | 0 | 122 passed, 0 failed, 0 skipped, 0 cancelled (`iter04_unit_tests.txt`) |
+| `npm run test:e2e` | Driver, Round 4 | 0 | Build succeeded and 10/10 loaded-extension tests passed in 29.3 s (`iter04_e2e_tests.txt`) |
+| Typecheck and unit | Builder | 0 / 0 (final) | Early runs exited 1 because of a fixture mode error, which the builder fixed (`BUILD_REPORT.md`) |
+| Race diagnostic | Me | 0 | The test harness passed, and the log showed the regression: 1 provider call after deletion |
 
-No failing, skipped or timed-out suite was recorded this round. I ran none of the suites myself.
-
-My read-only checks this round:
-- I unzipped `margin-extension.zip` (built 11:09) to a temp directory and compared it with `diff -rq` against `dist` (rebuilt by the driver at 11:28). All 229 files match, `manifest.json` is at the root, and there are no `.map`, `.env` or local config files. I deleted the temp directory.
-- `git grep` for API-key and private-key patterns found nothing. The UUID grep over `src`, `submission`, `README.md` and `scripts` found nothing. No `.env`, `config.local` or service-account file is tracked.
-- HEAD descends from `508bb32`.
+The new unit tests cover settings that change while waiting for the lock, a second capture in the same pass, and the setup backoff timing. None of them deletes an entry while `prepare()` is in flight.
 
 ## Stage One
 
 | # | Grade | Evidence |
 |---|---|---|
-| 1. Hybrid SDK called at runtime | **Met (code)** | `createRuntime` builds `FirebaseProvider` when the build is configured and not in Demo mode (`runtime.ts:16–23`). The router reaches `ONLY_ON_DEVICE`, `ONLY_IN_CLOUD`, `PREFER_*`, queue and confirm. Live Firebase or Nano could not run here. |
-| 2. App Check | **Met (code)** | `initializeAppCheck` runs in `src/firebase/init.ts:20`. The code honestly states the debug-token limitation. No token is committed. |
-| 3. Public repo + license | **Partial** | Apache-2.0 `LICENSE` is at the root, and `origin` points to `MadanChaollaPark/margin-flashcards`. Anonymous visibility and GitHub's license detection are unverified (the brief is local-only). |
-| 4. Demo script | **Partial** | Nine contiguous shots total 2:50, and shots 1–2 end at 0:30 covering the audience, the problem and hybrid inference. Shot 4 is now one offline cycle that credits Margin. The Demo voice-over table covers shots 2, 3, 4, 5, 6 and 8, and each line marks the result as simulated. The exact Only cloud reconnect is unit-tested only; the e2e queue case switches to Privacy mode first. |
-| 5. Devpost story | **Partial** | The qualified tagline and the sensitivity sentence match `router.ts`: the pattern heuristic, the `confirm` branch when Nano is unavailable, `localOnly`, and Remote Config `sensitivityCheck`. The finding 1 race contradicts "Privacy mode … always keep[s] captures local" for a manual retry. |
-| 6. Testing instructions / installable | **Partial** | Source and ZIP steps are present, and the ZIP matches the tested `dist`. The e2e quick look covers the popup's side-panel open call, sample generation, save and review. A native side-panel walkthrough in Chrome is unverified. |
-| 7. No secrets / PII | **Met (reviewed material)** | Scans above are clean. The script uses `learner@example.invalid`. The driver's staged scan is still pending. |
-| 8. English | **Met** | e2e asserts `lang="en"` on five pages, and all materials are in English. |
-| 9. Demo labeling | **Met** | The banner and Simulated badges are asserted in e2e. I viewed `cover.png`: it shows the new tagline and the DEMO MODE and Simulated labels on both embedded views. |
+| 1. Hybrid SDK called | Met in code | `firebaseProvider.ts:33` calls `getAI` with `useLimitedUseAppCheckTokens`. The provider also calls `getGenerativeModel` with `ONLY_ON_DEVICE`, `PREFER_ON_DEVICE` (falling back to `ONLY_IN_CLOUD`) and `PREFER_IN_CLOUD`, then calls `generateContent` and reads `inferenceSource` (lines 47-99). Grading uses `ONLY_ON_DEVICE` (`grade.ts:35`). Live Firebase and Nano can't run here. |
+| 2. App Check | Met in code | `firebase/init.ts:20` calls `initializeAppCheck`. No debug token or local config file is tracked. |
+| 3. Public repo and license | Partial | Apache-2.0 is in `LICENSE`. I could not check anonymous GitHub access or license detection locally. |
+| 4. Demo script | Partial | It is in English and runs 2:50. Shots 1-2 end at 0:30 and cover the audience, problem and hybrid routing. Demo-mode narration is labeled simulated. No one has rehearsed it in native Chrome. The closing privacy claim is stronger than what the code guarantees. |
+| 5. Devpost story | Partial | It covers Firebase AI Logic, the features and the value. The Privacy mode absolute claim is undercut by the regression and the stale retry window. |
+| 6. Testing instructions | Partial | Source and ZIP install paths are documented, and the e2e suite exercises the loaded extension. The native side panel and the script's Only cloud reconnect step have not been checked by hand. |
+| 7. No secrets or PII | Met | Credential-pattern `git grep` found nothing. No `.env`, `config.local` or service-account files are tracked. The script uses a `.invalid` address. |
+| 8. English | Met | All extension pages assert `lang="en"`, and all materials are in English. |
+| 9. Demo labeled | Met | The e2e suite checks the Demo banner and Simulated labels. The cover shows both. |
 
 ## Stage Two
 
-- **Tech 3.5.** Routing, chunking, the queue, export and restore are covered, typecheck is clean, and Remote Config and Firestore backup with anonymous Auth are used for real behavior. The Options retry race weakens the privacy gate, which is this product's main guarantee.
-- **Design 4.** The workflow is coherent and the cover is current. The accessibility sweep passes, with minimum contrast 5.71:1 in light mode and 6.80:1 in dark mode. The gap in the Options page left column is still deferred.
-- **Impact 4.** The case for learners is specific: reading becomes source-linked cards, sensitive notes stay local, and decks export to Anki. The tagline is now honest.
-- **Idea 4.5.** Hybrid inference has distinct jobs: the sensitivity gate, on-device grading and source-linked recall.
+- **Tech, 3.5.** Mode routing, the sensitivity gate, chunking, honest badges, Remote Config and the setup backoff are all real code. But the queue now sends inference for content the user has deleted, which works against the privacy routing the product is built around.
+- **Design, 4.** The flow is coherent. The e2e sweep checks accessible names and keyboard use. Minimum contrast is 5.71:1 in light mode and 6.80:1 in dark mode. The Options layout gap above Manage decks was deferred (optional item 5 was skipped).
+- **Impact, 4.** The case for readers who want to recall what they read and take decks to Anki is specific. It depends on the privacy controls being reliable.
+- **Idea, 4.5.** Source-linked cards, on-device grading and sensitivity routing give each inference mode a distinct job.
 
 ## Engineering and packaging
 
-- **Suites:** pass (driver, exit 0 each).
-- **ZIP:** refreshed and matches `dist`.
-- **Screenshots:** current. Only the cover text changed, and it was re-rendered.
-- **README, script and story sync:** partial (finding 1 against the Privacy claim; README:65 retry claim against finding 2).
-- **Secret scan:** the working tree is clean; the driver's staged scan is pending.
+- **Required suites:** pass (driver).
+- **ZIP:** `margin-extension.zip` was rebuilt this round. The builder reports 229 entries, a matching `dist/`, and no source maps or local config. It will need rebuilding after the fix.
+- **Screenshots:** Only the cover was refreshed, which is all this round's changes needed.
+- **README and story:** Mostly in sync. The README architecture section doesn't list Options as an inference entry point (manual retry and diagnostics). The privacy wording overstates the guarantee.
+- **Secret scan:** clean locally. The publication scan is left to the driver.
 
-I made no changes. Tracked files, `STATE/REVIEW.md` and the owner's role assignments are as I found them.
+I left the worktree, `STATE/REVIEW.md` and the owner's role assignments untouched, and removed my temporary diagnostic file.
 
 ## Codex Sol evidence (FAIL)
 
-## Round 3 finding
+## Round 4 findings
 
-**A manual queue retry can route to cloud after the user enables Privacy mode.** The Options handler now reads settings before `drainQueue` acquires the shared Web Lock. A retry can wait behind another drain, then execute using the earlier settings even though Privacy mode is already saved. Round 2 read the settings inside the locked callback. [Options retry](/workspace/flashcard-ext/src/ui/options.ts:235) · [Queue lock](/workspace/flashcard-ext/src/ai/queue.ts:82)
+**A deleted capture can still reach the cloud provider.** Round 4 reads the queue entry before awaiting runtime setup and then processes that snapshot. Deleting a deck removes its queued captures under a different lock. The database checks whether the capture still exists before saving cards, but that check happens after inference. [Queue drain](/workspace/flashcard-ext/src/ai/queue.ts:47) · [Deck deletion](/workspace/flashcard-ext/src/ui/options.ts:141) · [Database completion](/workspace/flashcard-ext/src/storage/db.ts:287)
 
-I reproduced this with the actual Options handler, queue code, and router. I paused lock acquisition, enabled Privacy mode, and released the lock. Round 2 selected `only_on_device`. Round 3 selected `only_in_cloud` with the stored Privacy setting already enabled. The diagnostic exited `0` after confirming both outcomes. It used synthetic data and a stubbed Firebase call boundary. The regression forces the round verdict to fail.
+I paused runtime setup, deleted the deck, confirmed its capture was gone from the queue, and resumed setup. Round 3 (`260842c`) made zero provider calls. Round 4 made one `ONLY_IN_CLOUD` call to the stub provider in each path, manual retry and automatic drain. No cards were saved. The probe used synthetic text, the project router, and the in-memory database. No data was sent to Firebase. The first diagnostic launch hit a sandbox process-spawn error and exited `1`. The rerun exited `0` and confirmed the regression.
 
-## Test evidence
+**The previous lock-wait bug is fixed, but Options still has a settings race during setup.** The fresh unit tests cover toggling Privacy, Only on-device, or Demo while waiting for the lock, and changing settings between jobs. Options now reads settings inside the lock, then awaits Remote Config and starts generation with that snapshot. A settings change saved during that await can still be missed by a manual retry. The automatic setup-failure tests also confirm retries at 30 and 60 seconds without consuming capture attempts. [Options retry](/workspace/flashcard-ext/src/ui/options.ts:235) · [Runtime setup](/workspace/flashcard-ext/src/ai/runtime.ts:16) · [Unit tests](/workspace/flashcard-ext/test/unit/ai.test.ts:231)
+
+## Tests
 
 | Suite | Runner | Exit | Result |
 |---|---|---:|---|
-| `npx tsc --noEmit` | Driver, Round 3 | 0 | Clean. [Driver log](/workspace/flashcard-ext/STATE/logs/iter03_typecheck_tests.txt) |
-| `npm test` | Driver, Round 3 | 0 | 116 passed, zero failed, skipped, or cancelled. [Driver log](/workspace/flashcard-ext/STATE/logs/iter03_unit_tests.txt) |
-| `npm run test:e2e` | Driver, Round 3 | 0 | Build succeeded and all 10 loaded-extension tests passed in 28.8 s. [Driver log](/workspace/flashcard-ext/STATE/logs/iter03_e2e_tests.txt) |
+| `npx tsc --noEmit` | Round 4 driver | 0 | Clean. [Log](/workspace/flashcard-ext/STATE/logs/iter04_typecheck_tests.txt) |
+| `npm test` | Round 4 driver | 0 | 122 passed, zero failed, skipped, or cancelled. [Log](/workspace/flashcard-ext/STATE/logs/iter04_unit_tests.txt) |
+| `npm run test:e2e` | Round 4 driver | 0 | Build succeeded. All 10 loaded-extension tests passed in 29.3 seconds. [Log](/workspace/flashcard-ext/STATE/logs/iter04_e2e_tests.txt) |
 
-The orchestrator recorded baseline exits of `0 / 0 / 0` with 109 unit cases and 10 browser cases. The builder recorded successful typecheck and unit exits of `0 / 0`. The builder delegated browser execution to the driver because of the sandbox restriction. One early builder unit invocation lost its output session, and the completed retry exited `0`. I used the completed driver runs for the suite grades. [Checklist](/workspace/flashcard-ext/STATE/CHECKLIST.md) · [Build report](/workspace/flashcard-ext/STATE/BUILD_REPORT.md)
+I used the fresh driver logs for the required-suite grades. The orchestrator’s baseline suite exits were `0 / 0 / 0`. The builder’s final typecheck and unit exits were `0 / 0` after correcting an earlier failing fixture. The driver ran browser tests for the completed build. [Checklist](/workspace/flashcard-ext/STATE/CHECKLIST.md) · [Build report](/workspace/flashcard-ext/STATE/BUILD_REPORT.md)
 
 ## Stage One
 
 | Item | Grade | Evidence |
 |---|---|---|
-| 1. Firebase AI Logic hybrid SDK | **Verified in code** | The live provider calls `getAI`, constructs the model with SDK inference modes, calls `generateContent`, and reads `inferenceSource`. Model setup calls `initializeDeviceModel`. The provider unit test exercises SDK request serialization with intercepted `fetch`. Live Firebase and Nano execution remain unverified here. [Provider](/workspace/flashcard-ext/src/ai/firebaseProvider.ts:29) · [Provider test](/workspace/flashcard-ext/test/unit/ai.test.ts:35) |
-| 2. App Check | **Verified in code and setup instructions** | `initializeAppCheck` is wired into Firebase initialization and the AI client requests limited-use tokens. The instructions disclose the registered debug-token requirement and the production token issuer gap. [Initialization](/workspace/flashcard-ext/src/firebase/init.ts:12) · [Testing instructions](/workspace/flashcard-ext/submission/testing-instructions.md:10) |
-| 3. Public repository and license | **Partial** | The local `origin/main` points to `margin-flashcards`. Apache-2.0 is at the root and in the ZIP. Anonymous GitHub access and GitHub’s detected license display remain unverified. [License](/workspace/flashcard-ext/LICENSE) · [Submission checklist](/workspace/flashcard-ext/submission/submission-checklist.md) |
-| 4. Demo video materials | **Partial** | The nine English Chrome shots run continuously to 2:50. The audience, problem, and Firebase hybrid routing are covered by 0:30. Demo alternatives cover shots 2, 3, 4, 5, 6, and 8. The closing privacy claim needs the enabled-sensitivity-check qualification, and live shot timing remains unrehearsed in this review. [Script](/workspace/flashcard-ext/submission/demo-video-script.md:1) |
-| 5. Devpost story | **Partial** | It explains Firebase AI Logic, the product features, and the learner workflow. The headline promises consent before cloud processing for sensitive-looking text, but the same story describes a Remote Config setting that can disable the heuristic. With that setting off, a pattern-only match can route to cloud without a prompt. The retry regression also contradicts the Privacy mode guarantee. [Story](/workspace/flashcard-ext/submission/devpost-story.md:3) · [Router](/workspace/flashcard-ext/src/ai/router.ts:137) · [Remote Config](/workspace/flashcard-ext/src/firebase/remoteConfig.ts:55) |
-| 6. Judge installation and testing | **Partial** | Source and ZIP instructions are present. Chromium closed the popup after `chrome.sidePanel.open` resolved, then tested the sample and review through the extension page. The native Chrome side-panel walkthrough remains open. The exact simulated **Only cloud** reconnect sequence passed at unit level. [Testing instructions](/workspace/flashcard-ext/submission/testing-instructions.md:3) · [Browser test](/workspace/flashcard-ext/test/e2e/extension.spec.ts:183) |
-| 7. Secrets and PII | **Verified within local scan scope** | The driver’s credential and forbidden-path patterns produced zero hits in the tracked tree and the four commits in local `origin/main`. Source, docs, and research had no UUID-shaped debug tokens. The script uses a reserved `.invalid` address, and the archive bundles an empty Firebase config. |
-| 8. English | **Verified** | All five extension pages declare `lang="en"`. The script, story, checklist, and judge instructions are in English. [Accessibility test](/workspace/flashcard-ext/test/e2e/extension.spec.ts:223) |
-| 9. Demo labeling | **Verified** | The extension banner, simulated card and grading badges, and refreshed cover identify simulated results. The script calls for a visible banner, a simulated caption, and alternate narration. The driver’s browser run used Demo mode. [Cover](/workspace/flashcard-ext/submission/screenshots/cover.png) · [Demo narration](/workspace/flashcard-ext/submission/demo-video-script.md:28) |
+| 1. Firebase AI Logic hybrid inference | **Verified in code** | The configured runtime constructs `FirebaseProvider`. It calls `getAI`, `getGenerativeModel`, `generateContent`, and `initializeDeviceModel`. Routing uses all four SDK modes and labels results by inference source. Live Firebase and Nano execution remain unverified here. [Runtime](/workspace/flashcard-ext/src/ai/runtime.ts:16) · [Provider](/workspace/flashcard-ext/src/ai/firebaseProvider.ts:29) · [Router](/workspace/flashcard-ext/src/ai/router.ts:148) |
+| 2. App Check | **Verified in code** | Firebase initialization calls `initializeAppCheck`, and AI Logic requests limited-use tokens. The judge instructions disclose the registered debug token requirement and the missing production token issuer. [Initialization](/workspace/flashcard-ext/src/firebase/init.ts:12) · [Testing instructions](/workspace/flashcard-ext/submission/testing-instructions.md:10) |
+| 3. Public repo and detectable license | **Partial** | `origin` points to `margin-flashcards`, and Apache-2.0 is at the root and in the ZIP. Anonymous access and GitHub’s license detection remain unverified in this local review. [License](/workspace/flashcard-ext/LICENSE) · [Submission checklist](/workspace/flashcard-ext/submission/submission-checklist.md:15) |
+| 4. Honest demo video materials | **Partial** | I verified nine contiguous English Chrome shots totaling 2:50. The audience, problem, and hybrid inference are covered by 0:30. Alternate Demo narration identifies simulated results. Shot 3 describes the unavailable-Nano approval path while showing a Nano-ready local result. The live shots still need rehearsal. [Script](/workspace/flashcard-ext/submission/demo-video-script.md:15) |
+| 5. Devpost story | **Partial** | The story explains the learner workflow, the hybrid modes, and the default sensitivity check. Its unconditional Privacy and Only on-device claim exceeds what the manual retry currently guarantees if settings change during setup. [Story](/workspace/flashcard-ext/submission/devpost-story.md:32) · [Runtime setup](/workspace/flashcard-ext/src/ai/runtime.ts:16) |
+| 6. Judge installation and testing | **Partial** | Source and ZIP instructions are present. Playwright loads the extension, verifies the popup’s side-panel open call, then exercises sample generation, save, and review through `sidepanel.html`. The native Chrome walkthrough and live Only cloud reconnect remain unverified. The matching simulated reconnect passed at unit level. [Instructions](/workspace/flashcard-ext/submission/testing-instructions.md:3) · [Browser test](/workspace/flashcard-ext/test/e2e/extension.spec.ts:183) |
+| 7. Secrets and PII | **Verified within local scan scope** | There were zero credential or forbidden-path matches across 105 tracked files, the four post-root commits in local `origin/main`, and 28 bundled scripts. The ZIP embeds an empty Firebase config. The script’s example address uses `.invalid`. |
+| 8. English | **Verified** | The app and submission materials are in English. The accessibility suite checks the language on five extension pages. [Browser test](/workspace/flashcard-ext/test/e2e/extension.spec.ts:223) |
+| 9. Demo labeling | **Verified** | The browser run, script, and refreshed cover identify simulated inference. The browser assertions cover the Demo banner and simulated route badges. [Browser test](/workspace/flashcard-ext/test/e2e/extension.spec.ts:193) · [Cover](/workspace/flashcard-ext/submission/screenshots/cover.png) |
 
 ## Stage Two
 
-- **Technological implementation, 3.5/5.** The four SDK modes, sensitivity gate, chunking, actual-source badges, and Remote Config are substantive. Queue tests cover cross-mode isolation and legacy entries. The manual retry race exposes a gap in the privacy gate, and the browser restore test covers result handling with a stubbed backup response.
-- **Design, 4.0/5.** Capture, preview, library, review, and export form a coherent workflow. The five-page accessibility sweep passed, including accessible names and keyboard checks. Its minimum measured text contrast was 5.71:1 in light mode and 6.80:1 in dark mode. [Driver browser run](/workspace/flashcard-ext/STATE/logs/iter03_e2e_tests.txt)
-- **Potential impact, 4.0/5.** The student workflow makes a concrete case for turning assigned reading into scheduled recall and exporting to Anki. Its privacy value depends on honoring the active settings and describing the limits of sensitivity detection.
-- **Quality of the idea, 4.5/5.** Source-linked cards bring readers back to the passage, while on-device answer grading and sensitivity-based routing give hybrid inference distinct roles in the review loop.
+- **Technology, 3.5/5.** Hybrid routing, chunking, source badges, Remote Config, and local grading are implemented and tested. Anonymous Auth and Firestore support optional backup. The restore browser case uses a stub response. The stale queue entry can reach inference after deletion.
+- **Design, 4/5.** Capture, editing, review, and export form a coherent workflow. The five-page sweep passed accessible-name and keyboard checks. Minimum measured contrast was 5.71:1 in light mode and 6.80:1 in dark mode. The Options layout gap remains visible. [Browser log](/workspace/flashcard-ext/STATE/logs/iter04_e2e_tests.txt) · [Options screenshot](/workspace/flashcard-ext/submission/screenshots/08-export.png)
+- **Impact, 4/5.** The student workflow connects assigned reading to scheduled recall and Anki export. Reliable control over pending cloud work matters for the sensitive-notes use case.
+- **Idea, 4.5/5.** Source-linked cards, local answer grading, and per-capture sensitivity decisions give hybrid inference distinct roles in the study workflow.
 
 ## Engineering and packaging
 
 | Item | Grade | Evidence |
 |---|---|---|
-| Required test suites | **Verified** | All three fresh driver suites exited `0`. The separate queue diagnostic found the regression above. |
-| Refreshed ZIP | **Verified** | The builder recorded `npm run package` exit `0`. I verified archive integrity, the root manifest, 229 entries, and a byte-for-byte match with the current `dist/`. The archive contains no source maps, `.env` files, or local config file. [Build report](/workspace/flashcard-ext/STATE/BUILD_REPORT.md) |
-| Screenshots | **Verified for this round’s visible changes** | I inspected the refreshed cover and confirmed the new tagline and visible Demo labels. The gallery’s existing scenes are unaffected by the new mismatch notice. The cover will need another refresh when the tagline is corrected. [Cover](/workspace/flashcard-ext/submission/screenshots/cover.png) |
-| README architecture, script, and story | **Partial** | The architecture diagram matches the main inference, queue, library, and review paths. The privacy and consent wording still needs the corrections above. |
-| Publication secret scan | **Verified locally, pending for Round 3 publication** | The local scan was clean. The driver runs the staged scan at publication. [Driver scan](/workspace/flashcard-ext/driver.py:450) |
+| Required suites | **Verified** | All three fresh driver runs exited `0`. The separate probe reproduced a regression outside their coverage. |
+| Refreshed ZIP | **Verified** | Builder recorded `npm run package` exit `0`. I checked archive integrity and matched all 229 files byte-for-byte with current `dist/`. The root contains the manifest and license. No source maps or local config files were present. |
+| Screenshots | **Verified for Round 4 changes** | I inspected the refreshed cover and confirmed the tagline and Demo labels. The queue changes leave the existing gallery scenes visually unchanged. |
+| Architecture, script, and story | **Partial** | The diagram captures the main flow. The README’s inference-location summary omits Options retry and Diagnostics. The manual retry settings gap and live-shot rehearsal remain open. [README](/workspace/flashcard-ext/README.md:31) · [Diagnostics](/workspace/flashcard-ext/src/ui/diagnostics.ts:113) |
+| Publication secret scan | **Verified locally, pending publication** | The local scan was clean. The driver owns the staged scan for the Round 4 commit. [Driver](/workspace/flashcard-ext/driver.py:450) |
 
-This was a read-only review. The worktree, `STATE/REVIEW.md`, and the owner’s role decision were left intact.
+I left the worktree and `STATE/REVIEW.md` unchanged.
 
 ## Scores
 
@@ -140,13 +135,14 @@ This was a read-only review. The worktree, `STATE/REVIEW.md`, and the owner’s 
 
 ## Must-fix
 
-- In the Options retry, read settings and build the runtime inside the `drainQueue` callback, after the lock is acquired (or check the Demo/live mode and Privacy setting again right before each `process` call). Add a unit test that holds `margin-offline-queue`, turns Privacy mode on while a manual retry waits, and asserts the retry does not route to the cloud.
-- In `startQueueDrain`, when `prepare()` throws, schedule a backoff retry (or route the error into the per-job attempt and backoff handling). Add a test that injects one setup failure and checks recovery without another event.
-- After the queue fix, rebuild the ZIP with `npm run package`, rerun tsc, unit and e2e, and keep the README retry text and the story's Privacy-mode claim in sync.
-- Owner: verify anonymous repo access and GitHub's Apache-2.0 detection, and rehearse the shot 4 Only cloud reconnect in the packaged extension's native Chrome side panel.
-- Resolve the provider mode and privacy settings after the shared queue lock is acquired, before processing each queued capture. Add regression coverage for toggling Privacy mode, Only on-device, and Demo mode while a retry waits, and verify that a disallowed inference call never starts.
-- Qualify the tagline and privacy claims across the README, story, script, checklist, and cover. Tie the consent claim to the enabled sensitivity check and the pattern-only case, then refresh the cover from the corrected renderer.
-- Have the owner verify anonymous GitHub access and Apache-2.0 detection, load the ZIP in Chrome, and rehearse the native side-panel flow and timed live shots. Record the actual outcomes and leave the publication scan to the driver.
+- In `drainQueue`, re-read each entry with `database.get("queue", id)` after `prepare()` resolves and immediately before `context.process`, and skip it if it's gone. Alternatively, run Options deck deletion and single-capture removal under the `margin-offline-queue` lock. Add unit tests that delete the deck, and separately a single capture, while `prepare()` is held open, and assert zero provider calls.
+- Make manual retry recheck Privacy, Only on-device and Demo settings right before dispatch. Do this after Remote Config loads and after the cloud approval dialog. Add tests for a settings change during preparation and during approval.
+- Make the privacy claim in the README, story, script and cover match the verified behavior. Add Options retry and diagnostics to the README architecture section. Separate Nano's `responseConstraint` from the cloud's `responseSchema` in the structured-output description.
+- After the fixes, rerun the three suites and `npm run package`. The owner still needs to check anonymous GitHub access and Apache-2.0 detection, and rehearse the packaged extension in Chrome's native side panel, including the Only cloud reconnect step.
+- Re-read the queue entry after asynchronous setup and before inference. Skip deleted captures and covers for both manual retry and automatic drain with tests that delete the deck during setup and assert zero provider calls.
+- Revalidate Privacy, Only on-device, and Demo settings after asynchronous setup in Options before starting inference. Add coverage for a change saved during setup as well as during lock acquisition.
+- Align the README with the Options inference entry points and make shot 3 narration match the visible route. Rebuild the ZIP and rerun the required suites after the queue fixes.
+- Owner: verify anonymous GitHub access and Apache-2.0 detection, then rehearse the packaged native Chrome flow and the configured live shots, including Only cloud reconnect. Record the routes and timing observed.
 
 ## Win-ready
 

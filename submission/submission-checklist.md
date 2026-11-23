@@ -7,7 +7,7 @@ Legend: ✅ ready in this folder · ⚠️ needs the user · ❌ missing
 | Requirement (quoted/paraphrased from rules) | Status | Where / what to do |
 |---|---|---|
 | Devpost account + registered for the hackathon ("You must have a Devpost account to register") | ⚠️ | Create/sign in at devpost.com, click "Join hackathon". Check eligibility (not a resident of excluded countries; age of majority). |
-| Project name, tagline | ✅ | `devpost-story.md` (Margin — "Learn what you read. Sensitive-looking text stays on-device unless you approve cloud.") |
+| Project name, tagline | ✅ | `devpost-story.md` (Margin — "Learn what you read. Privacy mode keeps every capture on-device.") |
 | Select at least one platform | ✅ | Web (Chrome) |
 | Text description incl. "how you used Firebase AI Logic, a summary of the Project's features and functionality, and a value proposition" | ✅ | `devpost-story.md` (paste sections into Devpost) |
 | Built with | ✅ | `devpost-story.md` → Built with |

@@ -1,6 +1,6 @@
 # Margin
 
-**Tagline:** Learn what you read. Sensitive-looking text stays on-device unless you approve cloud.
+**Tagline:** Learn what you read. Privacy mode keeps every capture on-device.
 
 **Platform category:** Web (Chrome). It's a Chrome extension running Gemini Nano through Firebase AI Logic hybrid inference.
 
@@ -30,8 +30,8 @@ Margin is a Chrome extension that turns what you read into spaced-repetition fla
     - "PDFs without enough extractable text require cloud inference."
   - The badge stays with the card in the library and during review.
 - **Sensitivity checks before cloud inference**
-  - Margin’s sensitivity check uses a local pattern heuristic and adds a Gemini Nano screen for eligible text when Nano is available, asks for per-capture cloud approval when a pattern match is the only sensitivity signal and Nano is unavailable, and can be turned off by the Firebase project owner with the Remote Config `sensitivityCheck` parameter, while Privacy mode and Only on-device always keep captures local.
-  - Text flagged as sensitive requires on-device inference and is split into chunks if needed.
+  - When the sensitivity check is enabled (the default), Margin checks for sensitive patterns locally and uses Gemini Nano to screen eligible text when available. If a pattern match is the only sensitivity signal and Nano is unavailable, Margin asks for approval before using cloud inference for that capture.
+  - The Firebase project owner can turn off the check with the Remote Config `sensitivityCheck` parameter. Privacy mode and Only on-device always keep captures local. Text flagged by the on-device screen requires on-device inference and is split into chunks if needed.
 - **Privacy mode:** off by default. In Auto, long nonsensitive text can go to the cloud. Turning on Privacy mode requires on-device inference and blocks Firestore backup and restore. A configured live build can still fetch routing settings from Firebase Remote Config.
 - **Works offline**
   - With Nano ready, compatible captures keep working offline. Long text is split into on-device chunks.
@@ -87,7 +87,7 @@ Margin is a Chrome extension that turns what you read into spaced-repetition fla
 
 ## Challenges we ran into
 
-- **Choosing the mode per request.** We route text that Margin flags as sensitive to on-device inference. When only a pattern match fires and Nano is unavailable, the user can approve cloud inference for that capture unless local inference is required.
+- **Choosing the mode per request.** With the default Remote Config `sensitivityCheck` enabled, text flagged by Gemini Nano stays on-device. When a pattern match is the only signal and Nano is unavailable, cloud inference requires per-capture approval and a cloud-capable setting.
 - **The on-device token budget.** When long text runs on Nano, we chunk at sentence boundaries with overlap and de-duplicate cards across chunks. Auto can use a long-context cloud model for long, nonsensitive documents when online.
 - **Reliable JSON from a small model.** Structured output, plus a tolerant parser (code fences, trailing commas, truncated arrays), plus validation and caps.
 - **Extension constraints**
