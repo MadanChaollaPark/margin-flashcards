@@ -12,7 +12,7 @@
 1. Use Chrome desktop 139 or later. Enable `chrome://flags/#prompt-api-for-gemini-nano-multimodal-input` and restart.
 2. Clone the repo and run `npm ci`. Copy `firebase.config.example.json` to `firebase.config.local.json` and fill in your Firebase web app config. The project needs AI Logic enabled with the Gemini Developer API.
 3. Run `npm run build`, then load `dist/` unpacked.
-4. In Margin's Options, turn **Demo mode** off. Open DevTools on the Options page and copy the App Check debug token it logs. Register it in Firebase console → App Check → Apps → Manage debug tokens. Enter the registered token under **App Check debug token** in Margin Options, save it, and reopen Margin after it reloads.
+4. In Margin's Options, turn **Demo mode** off. Open DevTools on the Options page and copy the App Check debug token it logs. Register it in Firebase console → App Check → Apps → Manage debug tokens. Enter the registered token under **App Check debug token** in Margin Options, save it, and reopen Margin after it reloads. Live mode currently works only with a registered App Check debug token; the production App Check provider needs a token issuer that this build does not include.
 5. In the side panel, click **Enable on-device AI** if available and wait for **On-device ready**.
 6. Options → Diagnostics → **Run live hybrid test**. It should report the inference source (`on_device` or `in_cloud`) and latency.
 

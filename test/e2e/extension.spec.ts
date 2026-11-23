@@ -185,6 +185,11 @@ test("judge quick look generates simulated cards and starts a fresh review", asy
   const openPanel = popup.getByRole("button", { name: "Open side panel" });
   await expect(openPanel).toBeVisible();
   await expect(openPanel).toBeEnabled();
+  const article = await margin.context.newPage();
+  await article.goto(`${margin.site}/article.html`);
+  await popup.bringToFront();
+  // The popup closes once chrome.sidePanel.open resolves with the packaged side_panel entry (only host_permissions changes).
+  await Promise.all([popup.waitForEvent("close"), openPanel.click()]);
   const panel = await extensionPage(margin, "sidepanel.html");
   const welcome = panel.getByRole("heading", { name: "Welcome to Margin" });
   await expect(welcome).toBeVisible();
@@ -251,7 +256,7 @@ test("accessibility sweep covers five extension pages in light and dark", async 
   await expect(library.locator(".library-card").first()).toBeVisible();
   await expect(library.getByRole("button", { name: "Edit", exact: true }).first()).toBeVisible();
   await library.getByRole("button", { name: "Edit", exact: true }).first().click();
-  await expect(library.getByLabel("Back", { exact: true })).toBeVisible();
+  await expect(library.locator(".library-card").first().getByLabel("Back", { exact: true })).toBeVisible();
   await expect(review.locator("#card-front")).toBeVisible();
 
   for (const colorScheme of ["light", "dark"] as const) {
@@ -461,7 +466,7 @@ test("long notes generate deduplicated on-device chunks offline and route to clo
   const badges = panel.locator(".card .badge");
   await expect(badges).toHaveText(["Simulated · On-device", "Simulated · On-device"]);
   await badges.first().click();
-  await expect(panel.getByText(/Split into 2 on-device chunks\./iu)).toBeVisible();
+  await expect(panel.locator(".card").first().getByText(/Split into 2 on-device chunks\./iu)).toBeVisible();
   await expect(panel.locator(".preview-front")).toHaveText(["What is Turgor pressure?", "What is Osmosis?"]);
 
   await margin.context.setOffline(false);
@@ -469,7 +474,7 @@ test("long notes generate deduplicated on-device chunks offline and route to clo
   await generateFromNotes(panel, notes);
   await expect(badges).toHaveText(["Simulated · Cloud", "Simulated · Cloud"]);
   await badges.first().click();
-  await expect(panel.getByText(/exceeds the on-device token budget/iu)).toBeVisible();
+  await expect(panel.locator(".card").first().getByText(/exceeds the on-device token budget/iu)).toBeVisible();
   expect(margin.errors).toEqual([]);
 });
 

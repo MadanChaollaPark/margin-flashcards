@@ -1,6 +1,6 @@
 # Margin
 
-**Tagline:** Learn what you read. Private by default, cloud when it counts.
+**Tagline:** Learn what you read. Sensitive text stays on-device. Cloud when it counts.
 
 **Platform category:** Web (Chrome). It's a Chrome extension running Gemini Nano through Firebase AI Logic hybrid inference.
 
@@ -12,7 +12,7 @@ Take a third-year medical student. Every day she reads lecture slides, guideline
 
 Cloud-based card generation can save time, but it needs a connection and sends the reading to a server. That can be a poor fit for sensitive notes, internal work documents or study sessions on the subway.
 
-**Margin uses Gemini Nano for everyday generation and to screen eligible text locally before cloud inference.** Users can choose their inference preferences, require on-device processing and see where each generated card came from.
+**Margin prefers Gemini Nano for short, supported inputs in Auto and can also use Nano to screen eligible text locally before cloud inference.** Users can choose their inference preferences, require on-device processing and see where each generated card came from.
 
 ## What it does
 
@@ -29,18 +29,18 @@ Margin is a Chrome extension that turns what you read into spaced-repetition fla
     - "This input exceeds the on-device token budget."
     - "PDFs without enough extractable text require cloud inference."
   - The badge stays with the card in the library and during review.
-- **Gemini Nano as the cloud gatekeeper**
-  - A local pattern check screens captured text. With the sensitivity check enabled and Nano ready, Margin uses structured-output classification on eligible text that could otherwise go to the cloud.
-  - If the text looks sensitive, the job stays on-device, split into chunks if needed.
-  - When a pattern match is the sole sensitivity signal and Nano is unavailable, Margin can request consent for that capture. Privacy mode and Only on-device keep it local.
-- **Privacy mode:** forces on-device inference, so no source content leaves your machine.
+- **Sensitivity checks before cloud inference**
+  - With the sensitivity check enabled, Margin screens captured text for patterns locally. When Nano is ready, Margin also uses structured-output classification on eligible text that could otherwise go to the cloud.
+  - Text flagged as sensitive requires on-device inference and is split into chunks if needed.
+  - When a pattern match is the sole sensitivity signal and Nano is unavailable, cloud inference requires approval for that capture. Privacy mode and Only on-device keep it local.
+- **Privacy mode:** off by default. In Auto, long nonsensitive text can go to the cloud. Turning on Privacy mode requires on-device inference and blocks Firestore backup and restore. A configured live build can still fetch routing settings from Firebase Remote Config.
 - **Works offline**
   - With Nano ready, compatible captures keep working offline. Long text is split into on-device chunks.
   - Jobs that truly need the cloud, such as scanned PDFs, are queued. They retry with backoff while the side panel is open and you're back online. You can also retry them manually from Options.
 - **Review with private answer grading**
   - You type your answer and Gemini Nano grades it on-device: Correct, Partly correct or Incorrect.
   - It lists the key terms you missed and suggests a rating (Again, Hard, Good or Easy).
-  - Your answers never leave the device.
+  - Typed answers stay on-device during grading.
 - **Real spaced repetition:** FSRS scheduling via the open-source ts-fsrs library. Each rating button previews its next interval. There are also keyboard shortcuts, cloze cards and a session summary.
 - **Library and export**
   - A searchable card library where you can edit, retag, move cards between decks or delete them.
@@ -72,9 +72,9 @@ Margin is a Chrome extension that turns what you read into spaced-repetition fla
   Routing decisions include a human-readable reason. Unit tests assert that all four Firebase inference modes are reachable.
 - **Firebase App Check:** AI Logic requires it. We use the debug provider on the `chrome-extension://` origin, which the rules accept.
 - **Firebase Remote Config** supplies the routing values: the on-device token budget, the model names (`gemini-3.5-flash-lite` for standard requests, `gemini-3.8-flash` for long documents) and cards per chunk. Safe defaults are built in.
-- **Firebase Authentication + Cloud Firestore** power an optional deck backup, off by default.
+- **Firebase Authentication + Cloud Firestore** power an optional deck backup. Backup is off by default, and Privacy mode blocks backup and restore.
   - It signs in anonymously.
-  - It stores cards and scheduling state, never source text.
+  - It stores deck names and creation times, card fronts and backs (which can quote the source), card type, deck ID, card creation time, optional tags, and optional FSRS scheduling state. The captured passage and source URL stay out of the backup.
   - Security rules limit each user to their own data.
 - **Chrome MV3**
   - Side panel, popup, review page, library and options pages.
@@ -88,8 +88,8 @@ Margin is a Chrome extension that turns what you read into spaced-repetition fla
 
 ## Challenges we ran into
 
-- **Choosing the mode per request.** `PREFER_ON_DEVICE` everywhere hides decisions that matter. A sensitive note should never quietly fall back to the cloud. We built the router so users can see and control those choices.
-- **The on-device token budget.** Long pages exceed what Nano can take. We chunk at sentence boundaries with overlap and de-duplicate cards across chunks. Long, non-sensitive documents go to a long-context cloud model.
+- **Choosing the mode per request.** We route text that Margin flags as sensitive to on-device inference. When only a pattern match fires and Nano is unavailable, the user can approve cloud inference for that capture unless local inference is required.
+- **The on-device token budget.** When long text runs on Nano, we chunk at sentence boundaries with overlap and de-duplicate cards across chunks. Auto can use a long-context cloud model for long, nonsensitive documents when online.
 - **Reliable JSON from a small model.** Structured output, plus a tolerant parser (code fences, trailing commas, truncated arrays), plus validation and caps.
 - **Extension constraints**
   - MV3's content security policy: no remote code, and WASM for sql.js.
@@ -100,7 +100,7 @@ Margin is a Chrome extension that turns what you read into spaced-repetition fla
 ## Accomplishments that we're proud of
 
 - Users can see and control the split between device and cloud. It isn't hidden as an implementation detail.
-- Answer grading during review is private and works offline.
+- When Nano is ready, answer grading runs on-device and works offline.
 - The whole loop works: capture → generate → edit → review → export to Anki.
 
 ## What we learned

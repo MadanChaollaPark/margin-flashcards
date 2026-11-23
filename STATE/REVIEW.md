@@ -1,161 +1,147 @@
-# iter01 review
+# iter02 review
 
 ## Verdict: FAIL
 
-## Tests: FAIL
+## Tests: PASS
 
-## Regressions: FOUND
+## Regressions: NONE
 
-Reviewer verdict: FAIL (agreement on attempt 1). Driver verdict: FAIL (driver's test gate failed).
+Reviewer verdict: FAIL (agreement on attempt 2). Driver verdict: FAIL (agreement on attempt 2).
 
 ## Kiro Opus 5.5 evidence (FAIL)
 
-# Round 1 review: Margin (reviewer: Opus 5.5)
+# Round 2 review of Margin (reconciliation attempt 2)
 
+The verdict is FAIL because the orchestrator's baseline e2e run on HEAD `8e85524` had two failing tests this round, and the brief says any failed test found this round forces FAIL. Those failures were in the accessibility sweep and the long-notes chunking test. The diff fixes both, and the fresh driver run passes all three suites, so the current build is green. PASS would be ruled out anyway, because several Definition of Done items are still unmet or can't be verified here.
 
+I disagree with the peer review on regressions. Nothing that was correct at HEAD is broken in the diff. The application source and manifest are unchanged. The issues the peer listed are incomplete fixes or old defects:
+- The Demo-mode narration was missing entirely before and is now only partly written.
+- The queue mode-boundary bug already existed at HEAD.
+- The stale cover is a known pending item; `submission-checklist.md` marks it "⚠ cover".
 
-
-
-
-
-
-## Test results
-
-| Suite | Who ran it | Result |
-|---|---|---|
-| `npx tsc --noEmit` | Driver (`STATE/logs/iter01_typecheck_tests.txt`) | EXIT=0, no diagnostics |
-| `npm test` | Driver (`STATE/logs/iter01_unit_tests.txt`) | EXIT=0, 109 pass, 0 fail, 0 skipped |
-| `npm run test:e2e` | Driver (`STATE/logs/iter01_e2e_tests.txt`) | **EXIT=1: 8 passed, 2 failed** |
-| `npm run test:e2e` | Builder (`BUILD_REPORT.md` §7) | Exit 1. All 10 failed at the fixture with `listen EPERM 127.0.0.1` before any test body ran |
-
-The builder could not run browsers. That means the two new or rewritten Playwright tests were first run by the driver, and both failed:
-
-1. **`accessibility sweep covers five extension pages in light and dark`** (`test/e2e/extension.spec.ts:254`). `library.getByLabel("Back", { exact: true })` hit a strict-mode violation: it resolved to 8 textareas, because every library card keeps its hidden edit form in the DOM. The test stopped before any contrast, accessible-name or Tab-focus assertion ran. Browser-computed accessibility is therefore still unverified.
-2. **`long notes generate deduplicated on-device chunks offline and route to cloud online`** (`:464`). `panel.getByText(/Split into 2 on-device chunks\./iu)` resolved to 2 elements. `src/ui/shared.ts:92-96` gives each card's route `<details>` its own `p.hint` with the same reason. The badges and routing behaved as intended (both cards were "Simulated · On-device"). The locator is not scoped to one card, and the cloud half of the test never ran.
-
-Both failures are test-locator bugs, not product defects. Under the round rules, a failed suite still forces FAIL, and new failing e2e tests count as a regression in the test suite. The other 8 e2e tests passed, including the new quick-look and YouTube tests, which the builder had never seen pass.
-
-## Definition of Done grades
-
-**1. Hybrid Inference SDK called at runtime: Met (code inspection).**
-- `src/ai/firebaseProvider.ts` calls `getAI(app, { backend: new GoogleAIBackend(), useLimitedUseAppCheckTokens: true })` and `getGenerativeModel(...)` with `mode`, `onDeviceParams` and `inCloudParams`.
-- It calls `model.generateContent(...)` and reads `response.inferenceSource`. It also calls `initializeDeviceModel`.
-- `src/ai/router.ts` produces `ONLY_ON_DEVICE`, `PREFER_IN_CLOUD` and `ONLY_IN_CLOUD`. `PREFER_ON_DEVICE` is handled in `provider.ts` and `firebaseProvider.ts`. The unit test "decide produces all four Firebase inference modes" passes.
-- No live call could run here, which the docs acknowledge.
-
-**2. App Check: Met, with a caveat.**
-- `src/firebase/init.ts` calls `initializeAppCheck` with `CustomProvider` and sets `FIREBASE_APPCHECK_DEBUG_TOKEN` from user settings at runtime.
-- No token is committed. The UUID grep over `research src submission README.md scripts` returned 1, and `.env*` and `firebase.config.local.json` are absent from disk and git.
-- Caveat: the production `CustomProvider.getToken` always throws, so only the debug-token path works. The code comment says so. The judge instructions should state it too.
-
-**3. Public repo and license: Partially verified.**
-- `LICENSE` is Apache-2.0 and unchanged.
-- `origin` points to `MadanChaollaPark/margin-flashcards`, the branch is `main`, and HEAD descends from `508bb32`.
-- I did not check that the repo is public online.
-
-**4. Demo video script: Met.**
-- Nine shots running 0:00–2:50, all in English.
-- 0:00–0:30 covers the audience (students), the problem, and Firebase AI Logic hybrid inference.
-- The script tells the owner to record the live path and to keep the DEMO MODE banner and a "simulated" label on any Demo footage.
-- "This paragraph ran on my laptop" is only true for a live recording. The script requires a live recording, so this is acceptable.
-
-**5. Devpost story: Met (inspection).**
-- The diff aligns the story with the current labels and routes.
-- The builder's `rg` checks tied the quoted route reasons to `src/ai/router.ts` and `provider.ts`. I spot-checked "exceeds the on-device token budget" and "Split into N on-device chunks" in `router.ts`.
-
-**6. Testing instructions: Partial.**
-- `submission/testing-instructions.md` covers both the source build and the optional release ZIP, plus the live setup with the App Check debug token.
-- The core flow works in 8 passing e2e tests.
-- The quick-look path passed in e2e. The accessibility and long-note paths are not verified this round.
-
-**7. No secrets or PII: Met.**
-- `git grep` for `AIza…` and private keys returned 1 (no matches).
-- The research token was replaced with `<DEBUG_TOKEN>`.
-- The 33 top-level `logs/` files are deleted in the worktree.
-- The fictional example uses `learner@example.invalid`.
-
-**8. English: Met.** `lang="en"` is asserted in tests, and all materials are English.
-
-**9. Mock mode clearly labeled: Met.** The "DEMO MODE (simulated AI)" banner and the "Simulated · …" badges are asserted in the passing e2e tests. The docs make no claim that live inference ran here.
-
-**Engineering and packaging: Not met.**
-- e2e failed (above).
-- Screenshots were not regenerated: all PNGs still have Nov 20 timestamps. `09-review-dark.png` was only renamed to `10-review-dark.png`. The framing changes to `scripts/screenshots.mjs` are untested.
-- `margin-extension.zip` was produced by `npm run package` (Nov 22 23:40, 229 files, no `.map` or `.env`). The driver rebuilt `dist/` afterwards. The only source changes this round are tests, docs and scripts, so the ZIP content is probably current, but I did not diff it.
-
-## Other checks
-
-- **Owner decision:** The role and consensus text is intact in GOAL.md and STATE/PLAN.md. `driver.py`, `GOAL.md` and `LICENSE` have no diff.
-- **Honesty of the build report:** It reports truthfully that e2e and screenshots were blocked, and it does not claim any pass it did not see. The builder's unit-count note ("7 tests" reported as 7 files) is explained correctly.
-- **Accessibility:** The builder's static WCAG token table shows every pair at 4.5:1 or higher. That is a calculation from CSS tokens, not a browser measurement. The browser sweep that should confirm it crashed before measuring anything.
-- **Security:** `useLimitedUseAppCheckTokens: true` is appropriate. The sensitivity gate runs before cloud-capable generation (`runtime.ts:61-63`), and unit tests cover it. Privacy mode blocks Firestore backup (unit-tested).
-
-## Codex Sol evidence (FAIL)
-
-The loaded-extension suite regressed from green. All six baseline cases passed again, along with the new quick-look and YouTube cases. Two new tests failed on ambiguous Playwright locators. The `src/` tree is identical to `HEAD`, and the driver evidence points to test defects. The round also has stale screenshots and submission claims that need correction. I left the worktree and `STATE/REVIEW.md` untouched.
+Process note for the owner: the builder sandbox can't run Playwright (`listen EPERM`). If builder runs count under the "any failed test this round" rule, every round will FAIL. The rule should probably name the driver's run as the deciding e2e result.
 
 ## Test evidence
 
-| Suite | Runner | Exit | Round 1 result |
+| Suite | Who ran it | Exit | Notes |
 |---|---|---:|---|
-| `npx tsc --noEmit` | Driver | 0 | Clean. [Typecheck log](/workspace/flashcard-ext/STATE/logs/iter01_typecheck_tests.txt) |
-| `npm test` | Driver | 0 | 109 passed, zero failed or skipped. [Unit log](/workspace/flashcard-ext/STATE/logs/iter01_unit_tests.txt) |
-| `npm run test:e2e` | Driver | 1 | Build passed. Chromium ran all 10 cases, with 8 passed and 2 failed. [E2E log](/workspace/flashcard-ext/STATE/logs/iter01_e2e_tests.txt) |
+| `npx tsc --noEmit` | Driver | 0 | `STATE/logs/iter02_typecheck_tests.txt` ends with `EXIT=0`. |
+| `npm test` | Driver | 0 | `iter02_unit_tests.txt`: `EXIT=0`, no todo or skipped tests, 109 cases (the same count the builder and orchestrator reported). |
+| `npm run test:e2e` | Driver | 0 | `iter02_e2e_tests.txt`: `10 passed (26.3s)`, `EXIT=0`. |
+| `npm run test:e2e` baseline on HEAD | Orchestrator | nonzero (exact code not recorded) | 8 passed, 2 failed, both strict-mode locator violations (`CHECKLIST.md` line 6). **This is a failed test found this round, which forces FAIL.** |
+| typecheck / unit / e2e | Builder | 0 / 0 / 1 | All 10 e2e tests failed on `listen EPERM 127.0.0.1` before any test body ran (`BUILD_REPORT.md:101`). This is a sandbox problem, not a product failure. |
 
-- **Accessibility sweep.** The page-wide `Back` locator matched eight card editors. The test stopped before the five-page light and dark sweep. The builder’s static contrast measurements provide supporting evidence, and browser-computed contrast, accessible names, and keyboard focus remain unverified across those states. [Failing assertion](/workspace/flashcard-ext/test/e2e/extension.spec.ts:254)
-- **Long notes.** Both simulated on-device badges appeared offline. The reason locator matched the explanation on both cards, so the test stopped before checking the unique fronts or reaching the online cloud phase. The online phase has the same unscoped locator pattern. [Chunking case](/workspace/flashcard-ext/test/e2e/extension.spec.ts:450)
+I ran no suites myself and relied on the driver logs above. My own checks were read-only:
+- `git grep` for Firebase-style API keys and private-key blocks found nothing.
+- I read the cover image and the relevant source.
+- `margin-extension.zip` exists, with a timestamp of 07:37 this round.
 
-The builder recorded typecheck and unit exits of 0 and an e2e exit of 1 from a loopback `EPERM` error. The fresh driver run supersedes that browser result because it reached the assertions. I inspected the driver logs and performed read-only artifact checks. [Build report](/workspace/flashcard-ext/STATE/BUILD_REPORT.md:57)
+## Diff summary
+
+- **`test/e2e/extension.spec.ts`:** three locators are now scoped to the first card (fixing the strict-mode failures). The quick-look test now clicks **Open side panel** in the popup and waits for the popup to close.
+- **README, story, script, submission checklist, `scripts/screenshots.mjs`:** the tagline changed from "Private by default, cloud when it counts" to "Sensitive text stays on-device. Cloud when it counts."
+- **Demo script:** adds a Demo-mode recording note and rewrites shot 4 as an offline flow with pasted notes (it no longer uses the PDF).
+- **Testing instructions:** now say live mode needs a registered App Check debug token.
+- **Screenshots:** five PNGs regenerated.
 
 ## Stage One
 
-| Item | Grade | Evidence |
+| # | Grade | Evidence |
 |---|---|---|
-| 1. Firebase AI Logic hybrid inference | **Pass for implementation** | Generation and typed review instantiate the live provider when configured. The provider calls `getAI`, `getGenerativeModel`, and `generateContent`, with `initializeDeviceModel` reachable from the enable button. The router implements all four SDK modes. Classification and grading request `ONLY_ON_DEVICE`. The packaged bundle contains the call sites. Live Firebase and Nano execution remain unverified as expected in this environment. [Provider](/workspace/flashcard-ext/src/ai/firebaseProvider.ts:29) · [Runtime](/workspace/flashcard-ext/src/ai/runtime.ts:16) · [Router](/workspace/flashcard-ext/src/ai/router.ts:148) |
-| 2. App Check | **Pass for implementation** | The live Firebase initializer calls `initializeAppCheck`, and AI Logic requests limited-use tokens. The documented judge path uses a locally registered debug token. Production attestation would require a token issuer. [App Check initialization](/workspace/flashcard-ext/src/firebase/init.ts:12) · [Diagnostics](/workspace/flashcard-ext/src/ui/diagnostics.ts:86) |
-| 3. Public repo and license | **Partial** | The local remote points to `MadanChaollaPark/margin-flashcards`, the cached `origin/main` matches local `main`, and Apache-2.0 is visible at the root. Public access and GitHub license detection remain unverified under the local-only constraint. [License](/workspace/flashcard-ext/LICENSE) |
-| 4. English demo video materials | **Partial** | I verified 170 seconds total and 61 opening words covering the audience, problem, and hybrid inference by 0:30. The offline scanned-PDF shot needs an accessible PDF source because capture fetches its bytes before routing can queue it. The script also needs alternate narration for any simulated shot that currently says inference ran on the laptop. [Demo script](/workspace/flashcard-ext/submission/demo-video-script.md:14) · [PDF capture](/workspace/flashcard-ext/src/sources/pdf.ts:31) |
-| 5. Devpost story | **Partial** | The story covers Firebase, features, and learner value. “Private by default” overstates Auto, which can use cloud inference while Privacy mode defaults off. “Never source text” is too broad for backup. Firestore omits the captured passage field and source metadata, while uploading card fronts and backs that can contain words from the passage, including on-device cards. [Story](/workspace/flashcard-ext/submission/devpost-story.md:24) · [Settings](/workspace/flashcard-ext/src/storage/settings.ts:16) · [Backup mapping](/workspace/flashcard-ext/src/firebase/sync.ts:53) · [Backup selection](/workspace/flashcard-ext/src/firebase/sync.ts:159) |
-| 6. Judge testing instructions and install | **Partial** | The instructions give a source build and an optional release ZIP. The quick-look case verified sample generation, saving, review, and welcome persistence. It checks that the popup button is enabled, then navigates directly to `sidepanel.html` using a test manifest. The actual toolbar-to-side-panel interaction with the packaged manifest remains unverified. [Instructions](/workspace/flashcard-ext/submission/testing-instructions.md:3) · [Quick-look case](/workspace/flashcard-ext/test/e2e/extension.spec.ts:183) |
-| 7. Keys, secrets, and PII | **Pass for reviewed material** | My scan of current repository files outside runtime logs and of the ZIP found zero credential-pattern hits. The config example uses placeholders, sensitive local filenames are ignored, and the submission example uses a fictional `.invalid` address. This scan covers the current material. |
-| 8. English | **Pass** | All five extension pages declare `lang="en"`. The instructions, story, and script are in English. |
-| 9. Demo labeling | **Pass** | All five pages declare a **DEMO MODE (simulated AI)** banner. Generated routes and typed grades have explicit **Simulated** labels. The passing quick-look test confirmed the banner and generated badge. [Badge rendering](/workspace/flashcard-ext/src/ui/shared.ts:100) · [Review feedback](/workspace/flashcard-ext/src/ui/review.ts:74) |
+| 1. Hybrid SDK called at runtime | **Pass (code)** | `firebaseProvider.ts` calls `getAI` with `useLimitedUseAppCheckTokens`, then `getGenerativeModel`, `generateContent`, and reads `inferenceSource`. `router.ts` chooses `ONLY_ON_DEVICE`, `ONLY_IN_CLOUD`, queue or confirm for each capture. Live calls can't run here. |
+| 2. App Check | **Pass (code)** | `src/firebase/init.ts` calls `initializeAppCheck`. The new line in the testing instructions honestly says only the debug-token path works. No token is committed. |
+| 3. Public repo + license | **Partial** | `LICENSE` is Apache-2.0, and the driver pushed to `MadanChaollaPark/margin-flashcards`. Public visibility and GitHub's license detection were not checked. |
+| 4. Demo video materials | **Partial** | The script runs 2:50, and the first 30 s cover the audience, the problem and hybrid inference. The new shot 4 matches the router: offline long text is chunked on-device, and offline "Only cloud" is queued. Gaps: the Demo-mode note only rewrites shot 2's narration. Shots 3, 4, 6 and 8 still say things like "Nano splits" and "Nano grades my answer" over simulated footage. Shot 4 now has two offline cycles and a settings change in 20 s with no timing check. |
+| 5. Devpost story | **Partial** | The new tagline is still absolute. `router.ts:148` returns `confirm` for a pattern-only sensitive match when Nano is unavailable. After the user approves, `ctx.confirmedCloud` sends the capture to the cloud. Remote Config can also set `sensitivityCheck` to false. The pattern check is a heuristic, so "Sensitive text stays on-device" overclaims. |
+| 6. Testing instructions / installable | **Partial** | The source build and ZIP steps are documented. The e2e test now covers the click from the popup to the side panel, then opens `sidepanel.html` in a tab. A walkthrough of the native panel in Chrome is not verified. |
+| 7. No secrets / PII | **Pass (working tree)** | `git grep` found no key patterns. The config example uses placeholders and the script uses `learner@example.invalid`. The driver's staged scan is still to come. |
+| 8. English | **Pass** | The e2e sweep asserts `lang="en"`, and all materials are in English. |
+| 9. Mock mode labeled | **Partial** | Every page shows the **DEMO MODE (simulated AI)** banner, and routes and grades show **Simulated** badges, including on the cover. The script narration over Demo footage still describes live behavior (see item 4). |
 
 ## Stage Two
 
-- **Technological implementation · 3.5/5.** Real SDK wiring, local sensitivity checks, offline retries, and Remote Config are substantive. Passing tests cover capture, review, exports, and YouTube captions. Firestore restore e2e coverage exercises result handling with a stubbed response. The long-text browser case remains incomplete.
-- **Design · 3.5/5.** Onboarding, route explanations, the editable library, and the review flow form a coherent product. The accessibility sweep stopped early. The current cover overlaps the extension views, and the export image crops out the main Demo banner. [Cover](/workspace/flashcard-ext/submission/screenshots/cover.png) · [Export screenshot](/workspace/flashcard-ext/submission/screenshots/08-export.png)
-- **Potential impact · 4/5.** The reading-to-recall workflow solves a concrete problem for learners. Source-linked cards and Anki export make the output useful beyond Margin. The privacy claims need to match the settings and backup behavior.
-- **Quality of the idea · 4.5/5.** Source-linked cards, local answer grading, and sensitivity-aware routing give each inference mode a distinct role in the study workflow.
+- **Technical implementation, 3.5/5.** Routing, chunking, the offline queue, review, export and restore are tested, and typecheck is clean. I confirmed a queue defect that predates this round. `generateCards` records whether a capture was simulated only in the reason text (`runtime.ts`, the `Simulated — ` prefix). The automatic drain (`sidepanel.ts`) and the manual retry (`options.ts`) both rebuild the provider from the current settings with `createRuntime()`. As a result, a capture queued in Demo mode can go to live cloud after the user turns Demo mode off. A live capture can also be completed with simulated cards. The sensitivity gate does run again on retry, which limits the privacy exposure.
+- **Design, 3.5/5.** The workflow hangs together, and the accessibility sweep passes (minimum contrast 5.71:1 light, 6.80:1 dark). `cover.png` is stale. I viewed it, and it still reads "Private by default, cloud when it counts" while every other material uses the new tagline. The gap in the Options page column noted in the checklist is still there.
+- **Potential impact, 4/5.** The story makes a specific case for learners: reading becomes source-linked cards, sensitive notes stay local, and decks go to Anki. It would be stronger if the privacy wording matched the actual controls.
+- **Quality of the idea, 4.5/5.** Hybrid inference does distinct jobs here: a sensitivity gate, on-device grading of typed answers, and source anchors that link back to the passage.
 
 ## Engineering and packaging
 
 | Item | Grade | Evidence |
 |---|---|---|
-| Required suites | **Fail** | Driver exits were typecheck 0, unit 0, and loaded-extension e2e 1. |
-| Refreshed ZIP | **Pass** | Builder ran `npm run package` with exit 0. I verified archive integrity and byte-for-byte equality with current `dist/`. The 229-entry ZIP has `manifest.json` at its root and contains no `.env`, local Firebase config file, or source maps. |
-| Refreshed screenshots | **Unmet** | Builder’s screenshot command failed twice. The images are dated Nov 20, and the renamed dark-review PNG is byte-identical to the previous file. [Screenshot report](/workspace/flashcard-ext/STATE/BUILD_REPORT.md:50) |
-| README diagram, script, and story | **Partial** | The diagram matches the core routing and queue structure. The script and story have the gaps identified in Stage One. |
-| Secret scan before each push | **Partial** | Current-file and ZIP scans were clean. The driver’s staged scan for the eventual commit remains pending. |
+| tsc / unit / e2e | **Pass (driver)** | All three exited 0. The baseline failure earlier this round is recorded above. |
+| Refreshed ZIP | **Pass** | `margin-extension.zip` was rebuilt at 07:37 this round. The builder reported 229 files, `manifest.json` at the root, and no source maps or env files. |
+| Screenshots | **Partial** | The gallery was regenerated. The cover is stale (see Design). |
+| README, script, story in sync | **Partial** | The tagline overclaims, the Demo-mode narration is incomplete, and the cover doesn't match. |
+| Secret scan | **Partial** | The working tree is clean. The driver's staged scan is pending. |
+
+## Codex Sol evidence (FAIL)
+
+The final driver run passed all three required suites. The builder’s Playwright run exited 1 this round when the sandbox denied the fixture listener. I counted that failed suite under the round’s explicit failure rule. The final diff fixes both baseline locator failures, and I found no new product or test regression. The stale cover, remaining privacy overstatement, and unverified public repository would also prevent a pass.
+
+## Test evidence
+
+| Command | Runner | Exit | Result |
+|---|---|---:|---|
+| `npx tsc --noEmit` | Driver | 0 | Clean. [Typecheck log](/workspace/flashcard-ext/STATE/logs/iter02_typecheck_tests.txt) |
+| `npm test` | Driver | 0 | 109 passed, zero failed, skipped, or cancelled. [Unit log](/workspace/flashcard-ext/STATE/logs/iter02_unit_tests.txt) |
+| `npm run test:e2e` | Driver | 0 | Build succeeded. All 10 loaded-extension cases passed in 26.3 seconds, with no skips. [E2E log](/workspace/flashcard-ext/STATE/logs/iter02_e2e_tests.txt) |
+| `npx tsc --noEmit` and `npm test` | Builder | 0 each | The build report records clean typecheck and 109 passing unit cases. [Build report](/workspace/flashcard-ext/STATE/BUILD_REPORT.md:91) |
+| `npm run test:e2e` | Builder | 1 | All 10 cases stopped in fixture setup at `listen EPERM 127.0.0.1`. No browser assertions ran. [Build report](/workspace/flashcard-ext/STATE/BUILD_REPORT.md:91) |
+| `npm run test:e2e` on the pre-edit baseline | Orchestrator | Unrecorded | Eight passed and two failed on ambiguous locators. Both cases passed in the final driver run. [Checklist](/workspace/flashcard-ext/STATE/CHECKLIST.md:5) |
+
+I inspected the fresh driver logs without rerunning the suites. The three locator edits scope assertions to the card whose editor or route details the test opens. The quick-look test now clicks **Open side panel** and waits for `chrome.sidePanel.open` to resolve, then exercises the side-panel workflow in a directly opened extension page. The fixture adds host permissions and preserves the packaged side-panel entry. [Test changes](/workspace/flashcard-ext/test/e2e/extension.spec.ts:183) · [Popup handler](/workspace/flashcard-ext/src/ui/popup.ts:15)
+
+## Stage One
+
+| Item | Grade | Evidence |
+|---|---|---|
+| 1. Firebase AI Logic hybrid inference | **Met in code** | The configured live runtime instantiates `FirebaseProvider`. It calls `getAI`, `getGenerativeModel`, `generateContent`, and, on user action, `initializeDeviceModel`. The router reaches all four SDK modes. Classification and typed grading request `ONLY_ON_DEVICE` and require an on-device result. Live Firebase and Nano execution remain unverified in this environment. [Runtime](/workspace/flashcard-ext/src/ai/runtime.ts:16) · [Provider](/workspace/flashcard-ext/src/ai/firebaseProvider.ts:29) · [Router](/workspace/flashcard-ext/src/ai/router.ts:148) · [Grading](/workspace/flashcard-ext/src/ai/grade.ts:27) |
+| 2. App Check | **Met in code** | Live initialization calls `initializeAppCheck`. AI Logic requests limited-use tokens. The judge instructions explain the registered debug-token path and the missing production token issuer. [App Check initialization](/workspace/flashcard-ext/src/firebase/init.ts:12) · [Provider](/workspace/flashcard-ext/src/ai/firebaseProvider.ts:33) · [Judge instructions](/workspace/flashcard-ext/submission/testing-instructions.md:15) |
+| 3. Public repository and detectable license | **Partial** | Local `main` descends from the clean public root, `origin` points to `MadanChaollaPark/margin-flashcards`, and the root license is Apache-2.0. Public access and GitHub’s license display remain unverified under the local-only brief. [License](/workspace/flashcard-ext/LICENSE) · [Submission checklist](/workspace/flashcard-ext/submission/submission-checklist.md) |
+| 4. English Chrome demo materials | **Partial** | I verified nine contiguous shots totaling 2:50. The first 30 seconds cover students, the cost of making cards, and Firebase AI Logic hybrid inference. The revised offline queue sequence is feasible from code. The script offers a simulated recording, but only replaces shot 2’s narration. Shots 4 and 6 still describe Nano as doing the work shown, and shot 4 credits Nano with chunking that Margin performs before inference. [Demo script](/workspace/flashcard-ext/submission/demo-video-script.md:14) · [Chunking](/workspace/flashcard-ext/src/ai/router.ts:159) |
+| 5. Devpost story | **Partial** | The story explains the Firebase integration, features, and learner value. Its backup description correctly says card fronts and backs can quote the source. The headline still promises “Sensitive text stays on-device” without qualifying the cloud-approval exception that the body and router describe. The rendered cover still says “Private by default,” although Privacy mode defaults off. [Story](/workspace/flashcard-ext/submission/devpost-story.md:3) · [Router](/workspace/flashcard-ext/src/ai/router.ts:167) · [Settings](/workspace/flashcard-ext/src/storage/settings.ts:16) · [Cover](/workspace/flashcard-ext/submission/screenshots/cover.png) |
+| 6. Install and judge testing instructions | **Met for the Demo quick look** | The instructions cover source build and ZIP installation. The driver verified sample generation, saving, review, and the popup’s side-panel open call. The queue case verifies saving on reconnect after switching to Privacy mode. It leaves the recording script’s reconnect with **Only cloud** still selected unverified in-browser. [Instructions](/workspace/flashcard-ext/submission/testing-instructions.md:3) · [Quick look](/workspace/flashcard-ext/test/e2e/extension.spec.ts:183) · [Queue case](/workspace/flashcard-ext/test/e2e/extension.spec.ts:587) |
+| 7. No production keys, secrets, confidential data, or PII | **Met in reviewed material** | Credential-pattern and forbidden-filename checks found no matches in the reviewed public history or current tracked material. ZIP credential checks and the source and submission UUID scan were clean. The example address uses `.invalid` and the Firebase config contains placeholders. [Example config](/workspace/flashcard-ext/firebase.config.example.json) · [Ignore rules](/workspace/flashcard-ext/.gitignore) |
+| 8. English | **Met** | The browser sweep asserted `lang="en"` on all five extension pages. The story, script, and judge instructions are in English. [Accessibility sweep](/workspace/flashcard-ext/test/e2e/extension.spec.ts:262) |
+| 9. Mock and demo labeling | **Met in the extension and gallery** | The browser suite verifies the **DEMO MODE (simulated AI)** banner and simulated route and grading badges. The cover’s embedded views carry the Demo label. No live inference result is claimed for this review. The alternative recording narration still needs the edits under item 4. [Badge rendering](/workspace/flashcard-ext/src/ui/shared.ts:100) · [Review badge](/workspace/flashcard-ext/src/ui/review.ts:74) · [Cover](/workspace/flashcard-ext/submission/screenshots/cover.png) |
+
+## Engineering and packaging
+
+| Item | Grade | Evidence |
+|---|---|---|
+| Required suites | **Final driver run met. Round failure recorded.** | All required driver exits were 0. The builder’s full browser suite exited 1 at fixture setup. |
+| Refreshed ZIP | **Met** | The builder ran `npm run package`, exit 0. I verified archive integrity and all 229 entries byte-for-byte against the driver-built `dist/`. `manifest.json` is at the archive root. The ignored ZIP contains no source maps, `.env`, or local Firebase config. [Build report](/workspace/flashcard-ext/STATE/BUILD_REPORT.md:91) |
+| Current screenshots | **Partial** | The orchestrator refreshed the gallery. The hero, generated cards, export, and library shots show Demo labeling. I opened the current cover PNG and confirmed that it still displays the old tagline, even though the renderer source has changed. [Cover](/workspace/flashcard-ext/submission/screenshots/cover.png) · [Cover renderer](/workspace/flashcard-ext/scripts/screenshots.mjs:177) |
+| Architecture diagram, script, and story | **Partial** | The diagram reflects local checks, hybrid inference, cloud, the retry queue, and review. The script and story have the remaining copy and verification gaps above. [Architecture](/workspace/flashcard-ext/README.md:32) |
+| Secret scan per push | **Partial** | The local checks were clean. The driver’s staged scan is wired before commit and push. The round’s publication scan remains to be run. [Driver scan](/workspace/flashcard-ext/driver.py:450) · [Publication gate](/workspace/flashcard-ext/driver.py:531) |
+
+## Stage Two
+
+- **Technology, 4/5.** The mode selection, sensitivity gate, queue rerouting, chunking, source checks, and Remote Config have substantive coverage. Loaded-extension tests cover capture, review, export, and restore result handling. Live Firebase paths and actual Firestore restore remain unverified here.
+- **Design, 4/5.** Onboarding, capture, review, and export form a coherent flow. The five-page accessibility sweep passed its name and keyboard checks. The lowest measured text contrast was 5.71:1 in light mode and 6.80:1 in dark mode. The cover copy is stale. [Accessibility results](/workspace/flashcard-ext/STATE/logs/iter02_e2e_tests.txt)
+- **Impact, 4/5.** The story gives learners a concrete way to turn readings into scheduled recall and take decks to Anki. A qualified privacy claim would help readers understand when to use Privacy mode.
+- **Idea, 4.5/5.** Source-linked cards, local answer grading, and sensitivity checks give hybrid inference distinct roles in the reading-to-recall workflow.
+
+The review was read-only. The owner’s role and consensus decision remains intact in `GOAL.md` and `STATE/PLAN.md`. I left `STATE/REVIEW.md` and driver-owned files untouched.
 
 ## Scores
 
-- Kiro Opus 5.5: tech=3.5 design=3.5 impact=4.0 idea=4.0 avg=3.75
-- Codex Sol: tech=3.5 design=3.5 impact=4.0 idea=4.5 avg=3.88
+- Kiro Opus 5.5: tech=3.5 design=3.5 impact=4.0 idea=4.5 avg=3.88
+- Codex Sol: tech=4.0 design=4.0 impact=4.0 idea=4.5 avg=4.12
 
 ## Must-fix
 
-- Fix the accessibility sweep locator at `test/e2e/extension.spec.ts:254`. Scope it to the opened card, for example `library.locator(".library-card").first().getByLabel("Back", { exact: true })`, or use the `getByRole("article", …)` pattern the page-capture test already uses. Then confirm the whole light/dark contrast, name and focus sweep passes.
-- Fix the long-notes locator at `test/e2e/extension.spec.ts:464`, and the matching cloud check after it. Scope both to the first card, for example `panel.locator(".card").first().getByText(/Split into 2 on-device chunks\./iu)`, so the per-card route `<details>` duplicates don't cause a strict-mode violation. Then confirm the online cloud half passes.
-- Get `npm run test:e2e` to exit 0 with all 10 tests passing in the driver run.
-- Regenerate `submission/screenshots/` with `npm run screenshots` wherever Chromium can launch, so the new framing is actually rendered. Visually check the hero, side panel, export and dark-review shots against the current UI.
-- Re-run `npm run package` after the final build of the round and record the file count.
-- State in `submission/testing-instructions.md` (or the README Firebase section) that live mode works only with a registered App Check debug token, because the production `CustomProvider` has no token issuer.
-- Scope the accessibility assertion to the opened card editor and scope both chunking reason assertions to their opened route details. Rerun the full driver suite and verify the browser accessibility measurements and both halves of the chunking case.
-- Refresh and inspect the screenshot gallery in the browser environment used by the driver. Verify the hero, cover, and export framing and keep the Demo label visible wherever simulated output is shown.
-- Align the privacy claims in the story, script, and graphics with Auto routing and optional Firestore backup. Make explicit that saved card text can be backed up even when generation ran on-device.
-- Make the recording script reproducible. Supply an offline-accessible scanned PDF and rehearse capture, or use the covered cloud-only pasted-notes queue flow. Add simulated-shot narration wherever the live script claims a device or cloud result.
-- Verify the toolbar-to-side-panel quick look with the packaged manifest. Have the owner or driver confirm public repository access, detectable Apache-2.0 licensing, and a clean staged secret scan before publication.
+- Regenerate `submission/screenshots/cover.png` with `npm run screenshots` and inspect it, so it matches the final tagline.
+- Rewrite the tagline everywhere it appears (README, Devpost story, script shot 9, submission checklist, cover renderer). The new wording should reflect that the pattern check is a heuristic, that cloud runs only with per-capture approval, and that Privacy mode forces on-device. For example: "Sensitive text stays on-device unless you approve cloud."
+- Write Demo-mode narration for every simulated shot (3, 4, 6 and 8, not only shot 2), and time shot 4's two offline cycles against its 20 s slot.
+- Record Demo or Live on each queued capture. On automatic drain and manual retry, skip or ask about entries whose mode doesn't match the current settings. Add tests for switching in both directions.
+- Have the owner confirm the repo is public, that GitHub detects the license, and that the side panel works in Chrome with the packaged extension. The driver keeps the staged secret scan.
+- Process: have the driver's e2e run decide the round result, and record the exact exit code of the orchestrator's baseline run. Otherwise the builder sandbox's `EPERM` failure will force FAIL every round.
+- Run the next round’s full Playwright verification in the environment that can bind the loopback fixture and launch Chromium. Record a clean run for all three required suites.
+- Replace the blanket privacy tagline with wording that reflects the per-capture approval exception. Apply it across the README, Devpost story, script, checklist, and renderer, then regenerate and inspect `cover.png`.
+- Finish the simulated narration for shots 4 and 6. Credit Margin with chunking, and rehearse or verify the documented reconnect sequence with **Only cloud** still selected.
+- Have the owner verify anonymous access to `margin-flashcards` and GitHub’s Apache-2.0 display. Record the result and retain the driver’s staged secret scan before publication.
 
 ## Win-ready
 
