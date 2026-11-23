@@ -7,7 +7,7 @@ Legend: ✅ ready in this folder · ⚠️ needs the user · ❌ missing
 | Requirement (quoted/paraphrased from rules) | Status | Where / what to do |
 |---|---|---|
 | Devpost account + registered for the hackathon ("You must have a Devpost account to register") | ⚠️ | Create/sign in at devpost.com, click "Join hackathon". Check eligibility (not a resident of excluded countries; age of majority). |
-| Project name, tagline | ✅ | `devpost-story.md` (Margin — "Learn what you read. Sensitive text stays on-device. Cloud when it counts.") |
+| Project name, tagline | ✅ | `devpost-story.md` (Margin — "Learn what you read. Sensitive-looking text stays on-device unless you approve cloud.") |
 | Select at least one platform | ✅ | Web (Chrome) |
 | Text description incl. "how you used Firebase AI Logic, a summary of the Project's features and functionality, and a value proposition" | ✅ | `devpost-story.md` (paste sections into Devpost) |
 | Built with | ✅ | `devpost-story.md` → Built with |
@@ -17,7 +17,7 @@ Legend: ✅ ready in this folder · ⚠️ needs the user · ❌ missing
 | No production API keys / secrets / PII in repo, form, or testing instructions | ✅ | The example Firebase config contains placeholders. Keep real config in the Git-ignored `firebase.config.local.json` and run the secret scan before pushing. |
 | Demo video ≤ 3 min, shows project functioning on Chrome, public on YouTube, English | ⚠️ | The script and shot list are in `demo-video-script.md`. The owner records the live path, uploads the video publicly to YouTube and adds the link to Devpost. |
 | URL to the project for judging/testing (encouraged) | ⚠️ | Link to the public repository and include `testing-instructions.md`. A GitHub Release can optionally provide `margin-extension.zip`. |
-| Image gallery / screenshots | ✅ gallery / ⚠️ cover | `submission/screenshots/*.png` were regenerated on 2026-11-23. The orchestrator will regenerate `cover.png` next round to match the updated tagline. |
+| Image gallery / screenshots | ✅ | `submission/screenshots/*.png` were regenerated on 2026-11-23, including `cover.png` with the updated tagline. |
 | Existing-app disclosure | ✅ N/A | New project built during the Submission Period. |
 | Testing access free and unrestricted until judging ends | ⚠️ | Keep repo/release public through Dec 16, 2026. |
 
@@ -26,6 +26,7 @@ Legend: ✅ ready in this folder · ⚠️ needs the user · ❌ missing
 2. Put the config in `firebase.config.local.json` (git-ignored), `npm run build`, load `dist/` unpacked in Chrome 139+.
 3. Enable `chrome://flags/#prompt-api-for-gemini-nano-multimodal-input`, restart, click "Enable on-device AI" in Margin.
 4. Open Margin options → copy the App Check debug token from the console log → Firebase console → App Check → Apps → Manage debug tokens → add.
-5. Record the video per `demo-video-script.md`, upload to YouTube (Public).
-6. Verify that `main` is public on `MadanChaollaPark/margin-flashcards` and that the license appears in About.
-7. On Devpost, enter the story, Built with list, repository and YouTube links, screenshots and testing instructions. Pick "Web (Chrome)" and submit before Dec 1 at 07:00 KST.
+5. Follow `testing-instructions.md` in Chrome and verify the capture flow in the native side panel.
+6. Record the video per `demo-video-script.md`, upload to YouTube (Public).
+7. Verify that `main` is public on `MadanChaollaPark/margin-flashcards` and that the license appears in About.
+8. On Devpost, enter the story, Built with list, repository and YouTube links, screenshots and testing instructions. Pick "Web (Chrome)" and submit before Dec 1 at 07:00 KST.

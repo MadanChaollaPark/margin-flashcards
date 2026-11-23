@@ -68,9 +68,10 @@ export async function generateCards(
   if (decision.mode === "confirm") return { confirm: decision.reason };
   if (decision.mode === "queue") {
     if (!queueIfOffline) return;
-    const reason = provider instanceof MockProvider ? `Simulated — ${decision.reason}` : decision.reason;
+    const mock = provider instanceof MockProvider;
+    const reason = mock ? `Simulated — ${decision.reason}` : decision.reason;
     const queuedJob = ctx.confirmedCloud ? { ...job, cloudApproved: true } : job;
-    return { queued: await enqueue(queuedJob, reason) };
+    return { queued: await enqueue(queuedJob, reason, undefined, mock ? "demo" : "live") };
   }
 
   onStage?.(decision.mode === InferenceMode.ONLY_ON_DEVICE ? "Generating on-device…" : "Generating…");

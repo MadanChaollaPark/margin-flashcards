@@ -8,7 +8,7 @@ import { FirebaseProvider } from "../../src/ai/firebaseProvider";
 import { MockProvider } from "../../src/ai/mockProvider";
 import { createPrompt } from "../../src/ai/prompts";
 import type { AIProvider, ContentInput, GenerationJob, InferenceRequest } from "../../src/ai/provider";
-import { drainQueue, enqueue, startQueueDrain } from "../../src/ai/queue";
+import { drainQueue, enqueue, queuedMode, startQueueDrain } from "../../src/ai/queue";
 import { generateCards } from "../../src/ai/runtime";
 import { isConfigured } from "../../src/firebase/config";
 import { DEFAULTS, loadRemoteConfig } from "../../src/firebase/remoteConfig";
@@ -180,6 +180,107 @@ test("the offline queue retains failures and atomically saves cards on retry", a
   assert.equal((await database.all("cards")).length, 2);
 });
 
+test("automatic live drain leaves Demo captures unchanged", async (t) => {
+  const database = createMemoryDatabase();
+  const entry = await enqueue(job, "Simulated — Offline.", database, "demo");
+  const pending = { ...entry, attempts: 2, nextAttemptAt: 1_000, lastError: "Retry later." };
+  await database.put("queue", pending);
+  const process = t.mock.fn(async () => []);
+
+  await drainQueue(process, () => true, database, undefined, () => 1_000, "live");
+
+  assert.equal(process.mock.callCount(), 0);
+  assert.deepEqual(await database.get("queue", entry.id), pending);
+});
+
+test("automatic Demo drain leaves live captures unchanged", async (t) => {
+  const database = createMemoryDatabase();
+  const entry = await enqueue(job, "Offline.", database, "live");
+  const process = t.mock.fn(async () => []);
+
+  await drainQueue(process, () => true, database, undefined, Date.now, "demo");
+
+  assert.equal(process.mock.callCount(), 0);
+  assert.deepEqual(await database.get("queue", entry.id), entry);
+});
+
+test("manual retries in the other mode update only the queue error", async (t) => {
+  const database = createMemoryDatabase();
+  const demo = await enqueue(job, "Simulated — Offline.", database, "demo");
+  const failed = { ...demo, attempts: 3, state: "failed" as const };
+  await database.put("queue", failed);
+  const live = await enqueue(job, "Offline.", database, "live");
+  const process = t.mock.fn(async () => []);
+
+  await drainQueue(process, () => true, database, demo.id, Date.now, "live");
+  await drainQueue(process, () => true, database, live.id, Date.now, "demo");
+
+  assert.equal(process.mock.callCount(), 0);
+  assert.deepEqual(await database.get("queue", demo.id), {
+    ...failed, lastError: "Queued in Demo mode. Turn Demo mode on to retry, or remove it.",
+  });
+  assert.deepEqual(await database.get("queue", live.id), {
+    ...live, lastError: "Queued in live mode. Turn Demo mode off to retry, or remove it.",
+  });
+});
+
+test("a matching Demo drain saves cards and removes the queued capture", async () => {
+  const database = createMemoryDatabase();
+  const entry = await enqueue(job, "Simulated — Offline.", database, "demo");
+
+  await drainQueue(async (pending) => {
+    const result = await generateCards(pending, new MockProvider(), { config: DEFAULTS, online: true, privacyMode: false });
+    return result?.cards;
+  }, () => true, database, undefined, Date.now, "demo");
+
+  assert.equal(await database.get("queue", entry.id), undefined);
+  assert.equal((await database.all("cards")).length, 2);
+});
+
+test("legacy entries infer Demo mode from the simulated reason prefix", async (t) => {
+  const database = createMemoryDatabase();
+  const demo = await enqueue(job, "Simulated — Offline.", database);
+  const live = await enqueue(job, "Offline.", database);
+  assert.equal(Object.hasOwn(demo, "mode"), false);
+  assert.equal(queuedMode(demo), "demo");
+  assert.equal(queuedMode(live), "live");
+  assert.equal(queuedMode({ ...demo, mode: "live" }), "live");
+  const process = t.mock.fn(async () => []);
+
+  await drainQueue(process, () => true, database, undefined, Date.now, "live");
+
+  assert.equal(process.mock.callCount(), 1);
+  assert.deepEqual(await database.all("queue"), [demo]);
+});
+
+test("offline Only cloud capture saves simulated cloud cards on reconnect in the same mode", async (t) => {
+  const provider = new MockProvider();
+  const offline = { config: DEFAULTS, privacyMode: false, online: false, modeOverride: "only-cloud" } as const;
+  const queued = (await generateCards(job, provider, offline))?.queued;
+  assert.ok(queued);
+  t.after(() => db.delete("queue", queued.id));
+  const stored = await db.get("queue", queued.id);
+  assert.ok(stored);
+  assert.equal(stored.mode, "demo");
+  assert.match(stored.reason, /^Simulated — Offline\./u);
+  const database = createMemoryDatabase();
+  await database.put("queue", stored);
+
+  await drainQueue(async (pending) => {
+    const result = await generateCards(pending, provider, { ...offline, online: true }, { queueIfOffline: false });
+    return result?.cards;
+  }, () => true, database, undefined, Date.now, "demo");
+
+  assert.deepEqual(await database.all("queue"), []);
+  const cards = await database.all("cards");
+  assert.equal(cards.length, 2);
+  for (const card of cards) {
+    assert.equal(card.deckId, job.deckId);
+    assert.equal(card.route?.source, "in_cloud");
+    assert.equal(card.route.simulated, true);
+  }
+});
+
 test("a malformed model response gets one repair attempt in the same inference mode", async () => {
   const mock = new MockProvider();
   const calls: InferenceRequest[] = [];
@@ -224,6 +325,35 @@ test("queue backs off exponentially and stops after three attempts", async () =>
   assert.equal((await database.get("queue", entry.id))?.state, "failed");
 });
 
+test("automatic retries only schedule timers for captures in the current mode", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const database = createMemoryDatabase();
+  const entry = await enqueue(job, "Offline.", database, "live");
+  const pending = { ...entry, attempts: 1, nextAttemptAt: Date.now() - 1 };
+  await database.put("queue", pending);
+  const process = t.mock.fn(async () => []);
+  const onError = t.mock.fn();
+  const onComplete = t.mock.fn();
+  let mode: "demo" | "live" = "demo";
+  const controller = startQueueDrain(() => ({ mode, process }), onError, onComplete, { database, online: () => true });
+  t.after(controller.stop);
+
+  await setImmediate();
+  t.mock.timers.tick(1_000);
+  await setImmediate();
+  assert.equal(onComplete.mock.callCount(), 1);
+  assert.equal(process.mock.callCount(), 0);
+  assert.deepEqual(await database.get("queue", entry.id), pending);
+
+  mode = "live";
+  controller.drain();
+  await setImmediate();
+  assert.equal(onComplete.mock.callCount(), 2);
+  assert.equal(process.mock.callCount(), 1);
+  assert.equal(onError.mock.callCount(), 0);
+  assert.equal(await database.get("queue", entry.id), undefined);
+});
+
 test("queue drain requested mid-drain runs again and picks up newly queued jobs", async (t) => {
   const database = createMemoryDatabase();
   await enqueue(job, "Offline.", database);
@@ -233,11 +363,14 @@ test("queue drain requested mid-drain runs again and picks up newly queued jobs"
   const processed: string[] = [];
   const onError = t.mock.fn();
   const onComplete = t.mock.fn();
-  const controller = startQueueDrain(async (queued) => {
-    processed.push(queued.deckId);
-    if (queued.deckId === job.deckId) await firstJobGate;
-    return [];
-  }, onError, onComplete, { database, online: () => true });
+  const controller = startQueueDrain(() => ({
+    mode: "live",
+    async process(queued) {
+      processed.push(queued.deckId);
+      if (queued.deckId === job.deckId) await firstJobGate;
+      return [];
+    },
+  }), onError, onComplete, { database, online: () => true });
   t.after(() => { controller.stop(); releaseFirstJob(); });
 
   await setImmediate();
@@ -262,11 +395,14 @@ test("stopping the queue drain cancels a pending rerun", async (t) => {
   const processed: string[] = [];
   const onError = t.mock.fn();
   const onComplete = t.mock.fn();
-  const controller = startQueueDrain(async (queued) => {
-    processed.push(queued.deckId);
-    if (queued.deckId === job.deckId) await firstJobGate;
-    return [];
-  }, onError, onComplete, { database, online: () => true });
+  const controller = startQueueDrain(() => ({
+    mode: "live",
+    async process(queued) {
+      processed.push(queued.deckId);
+      if (queued.deckId === job.deckId) await firstJobGate;
+      return [];
+    },
+  }), onError, onComplete, { database, online: () => true });
   t.after(() => { controller.stop(); releaseFirstJob(); });
 
   await setImmediate();

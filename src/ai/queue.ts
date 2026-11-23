@@ -4,11 +4,13 @@ import type { GenerationJob } from "./provider";
 
 export const MAX_ATTEMPTS = 3;
 const INITIAL_BACKOFF_MS = 30_000;
+type QueueMode = "demo" | "live";
 
 export interface QueuedJob {
   id: string;
   job: GenerationJob;
   reason: string;
+  mode?: QueueMode;
   createdAt: number;
   attempts: number;
   state?: "queued" | "failed" | "confirm";
@@ -20,8 +22,14 @@ export function queueState(entry: QueuedJob): NonNullable<QueuedJob["state"]> {
   return entry.state ?? (entry.attempts >= MAX_ATTEMPTS ? "failed" : "queued");
 }
 
-export async function enqueue(job: GenerationJob, reason: string, database = db): Promise<QueuedJob> {
-  const entry: QueuedJob = { id: crypto.randomUUID(), job, reason, createdAt: Date.now(), attempts: 0, state: "queued" };
+export function queuedMode(entry: QueuedJob): QueueMode {
+  return entry.mode ?? (entry.reason.startsWith("Simulated — ") ? "demo" : "live");
+}
+
+export async function enqueue(job: GenerationJob, reason: string, database = db, mode?: QueueMode): Promise<QueuedJob> {
+  const entry: QueuedJob = {
+    id: crypto.randomUUID(), job, reason, ...(mode && { mode }), createdAt: Date.now(), attempts: 0, state: "queued",
+  };
   await database.put("queue", entry);
   return entry;
 }
@@ -34,6 +42,7 @@ export async function drainQueue(
   database: Database = db,
   onlyId?: string,
   now = Date.now,
+  mode?: QueueMode,
 ): Promise<void> {
   const drain = async () => {
     if (!online()) return;
@@ -43,6 +52,16 @@ export async function drainQueue(
     entries.sort((first, second) => first.createdAt - second.createdAt);
     for (const entry of entries) {
       if (!online()) break;
+      const capturedMode = queuedMode(entry);
+      if (mode && capturedMode !== mode) {
+        if (onlyId) {
+          const lastError = capturedMode === "demo"
+            ? "Queued in Demo mode. Turn Demo mode on to retry, or remove it."
+            : "Queued in live mode. Turn Demo mode off to retry, or remove it.";
+          await database.updateQueuedJob({ ...entry, lastError });
+        }
+        continue;
+      }
       try {
         const result = await process(entry.job);
         if (result === undefined) continue;
@@ -65,8 +84,10 @@ export async function drainQueue(
   else await drain();
 }
 
+type DrainContext = { process: ProcessJob; mode: QueueMode };
+
 export function startQueueDrain(
-  process: ProcessJob,
+  prepare: () => DrainContext | Promise<DrainContext>,
   onError = console.error,
   onComplete?: () => void,
   { database = db, online = () => navigator.onLine }: { database?: Database; online?: () => boolean } = {},
@@ -85,13 +106,20 @@ export function startQueueDrain(
     clearTimeout(timer);
     draining = true;
     try {
-      await drainQueue(process, online, database);
+      if (!online() || !(await database.all("queue")).some((entry) => queueState(entry) === "queued")) {
+        onComplete?.();
+        return;
+      }
+      const { process, mode } = await prepare();
+      // A new request can follow a settings change while the current pass is running.
+      await drainQueue((job) => stopped || rerun ? Promise.resolve(undefined) : process(job), online, database,
+        undefined, Date.now, mode);
       onComplete?.();
       if (stopped || !online()) return;
       const now = Date.now();
       const entries = await database.all("queue");
       const next = entries.reduce((earliest, entry) =>
-        queueState(entry) === "queued" && entry.nextAttemptAt !== undefined
+        queuedMode(entry) === mode && queueState(entry) === "queued" && entry.nextAttemptAt !== undefined
           ? Math.min(earliest, entry.nextAttemptAt) : earliest, Infinity);
       if (!stopped && Number.isFinite(next)) timer = setTimeout(drain, Math.max(1_000, next - now));
     } catch (error) {

@@ -1,6 +1,6 @@
 # Margin
 
-**Tagline:** Learn what you read. Sensitive text stays on-device. Cloud when it counts.
+**Tagline:** Learn what you read. Sensitive-looking text stays on-device unless you approve cloud.
 
 **Platform category:** Web (Chrome). It's a Chrome extension running Gemini Nano through Firebase AI Logic hybrid inference.
 
@@ -30,13 +30,12 @@ Margin is a Chrome extension that turns what you read into spaced-repetition fla
     - "PDFs without enough extractable text require cloud inference."
   - The badge stays with the card in the library and during review.
 - **Sensitivity checks before cloud inference**
-  - With the sensitivity check enabled, Margin screens captured text for patterns locally. When Nano is ready, Margin also uses structured-output classification on eligible text that could otherwise go to the cloud.
+  - Margin’s sensitivity check uses a local pattern heuristic and adds a Gemini Nano screen for eligible text when Nano is available, asks for per-capture cloud approval when a pattern match is the only sensitivity signal and Nano is unavailable, and can be turned off by the Firebase project owner with the Remote Config `sensitivityCheck` parameter, while Privacy mode and Only on-device always keep captures local.
   - Text flagged as sensitive requires on-device inference and is split into chunks if needed.
-  - When a pattern match is the sole sensitivity signal and Nano is unavailable, cloud inference requires approval for that capture. Privacy mode and Only on-device keep it local.
 - **Privacy mode:** off by default. In Auto, long nonsensitive text can go to the cloud. Turning on Privacy mode requires on-device inference and blocks Firestore backup and restore. A configured live build can still fetch routing settings from Firebase Remote Config.
 - **Works offline**
   - With Nano ready, compatible captures keep working offline. Long text is split into on-device chunks.
-  - Jobs that truly need the cloud, such as scanned PDFs, are queued. They retry with backoff while the side panel is open and you're back online. You can also retry them manually from Options.
+  - Jobs that truly need the cloud, such as scanned PDFs, are queued, with retries limited to the Demo or live mode in which they were queued. They retry with backoff while the side panel is open and you're back online. You can also retry them manually from Options.
 - **Review with private answer grading**
   - You type your answer and Gemini Nano grades it on-device: Correct, Partly correct or Incorrect.
   - It lists the key terms you missed and suggests a rating (Again, Hard, Good or Easy).

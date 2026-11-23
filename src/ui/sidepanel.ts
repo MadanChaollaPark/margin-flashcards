@@ -493,6 +493,7 @@ async function start() {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && (changes.mock || changes.privacyMode || changes.modeOverride || changes.appCheckDebugToken)) {
       void refreshStatus().catch(reportError);
+      retryQueue?.();
     }
     if (area === "session" && Object.keys(changes).some((key) => key.startsWith(PENDING_CAPTURE_PREFIX))) {
       void claimPending().catch(reportError);
@@ -502,10 +503,15 @@ async function start() {
     if (!busy) void refreshDecks().catch(reportError);
     void refreshQueue().catch(reportError);
   });
-  const queueDrain = startQueueDrain(async (job) => {
+  const queueDrain = startQueueDrain(async () => {
     const current = await createRuntime();
-    const result = await generateCards(job, current.provider, { ...current, online: navigator.onLine }, { queueIfOffline: false });
-    return result?.confirm ? { confirm: result.confirm } : result?.cards;
+    return {
+      mode: current.mock ? "demo" : "live",
+      async process(job) {
+        const result = await generateCards(job, current.provider, { ...current, online: navigator.onLine }, { queueIfOffline: false });
+        return result?.confirm ? { confirm: result.confirm } : result?.cards;
+      },
+    };
   }, reportError, () => { void refreshQueue().catch(reportError); });
   retryQueue = queueDrain.drain;
   window.addEventListener("offline", () => {

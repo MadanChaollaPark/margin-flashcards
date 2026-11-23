@@ -1,6 +1,6 @@
 # Margin
 
-**Learn what you read. Sensitive text stays on-device. Cloud when it counts.**
+**Learn what you read. Sensitive-looking text stays on-device unless you approve cloud.**
 
 Margin is a Chrome extension that turns web pages, highlights, PDFs, YouTube videos, images, and pasted notes into flashcards. Edit the cards in the side panel, revisit the source passage, and use spaced repetition to remember what you read. Every generated card carries a routing badge that explains where the work ran and why.
 
@@ -62,7 +62,7 @@ flowchart LR
 | Long text | Prefer the long-document cloud model for cloud-eligible text when online in Auto. Split into local chunks when Nano is ready and the router selects on-device inference. Chunks overlap by about 10% at sentence boundaries where possible. Margin deduplicates cards across chunks. |
 | Scanned PDF or video without accessible captions | Use the long-document cloud model. Margin extracts readable PDF text or captions locally when available. |
 | Nano unavailable for a cloud-eligible capture | Use the cloud when online. Downloadable and downloading states point to **Enable on-device AI**. |
-| Cloud needed while offline | Queue the capture locally. Cloud approval given offline stays with that capture. Keep the side panel open for automatic retries when you're online. It reroutes on reconnect and retries failures with 30-second and 60-second delays. After three failed attempts, the entry shows **Failed** with a manual retry in Options. |
+| Cloud needed while offline | Queue the capture locally, with retries limited to the Demo or live mode in which it was queued. Cloud approval given offline stays with that capture. Keep the side panel open for automatic retries when you're online. It reroutes on reconnect and retries failures with 30-second and 60-second delays. After three failed attempts, the entry shows **Failed** with a manual retry in Options. |
 | Typed answer during review | Check with Nano only. Manual reveal and self-rating are always available. |
 
 Margin can send up to 14 MB of raw media per capture for images, screenshots, and PDFs without extractable text.
@@ -148,6 +148,8 @@ Use Node.js 24 LTS (24.15 or newer) and install Playwright Chromium with `npx pl
 | `test/`, `scripts/`, `submission/` | Tests, tooling, and submission materials |
 
 ## Privacy
+
+Margin’s sensitivity check uses a local pattern heuristic and adds a Gemini Nano screen for eligible text when Nano is available, asks for per-capture cloud approval when a pattern match is the only sensitivity signal and Nano is unavailable, and can be turned off by the Firebase project owner with the Remote Config `sensitivityCheck` parameter, while Privacy mode and Only on-device always keep captures local.
 
 Cards, route history, queued source material, and review history live in this Chrome profile. On-device generation and typed-answer grading keep their input on the device. Cloud routes send source content or media to Firebase AI Logic and the Gemini API. Privacy mode is off by default. In Auto, long nonsensitive text can go to the cloud. Turning on Privacy mode requires on-device inference and blocks Firestore backup and restore. Firestore backup is also off by default. When Firebase is configured and Demo mode is off, Margin still fetches routing settings from Firebase Remote Config. Margin uses temporary Chrome tab access for captures and requests access to a particular site when a page or PDF needs additional permission. You can manage granted site access in Chrome’s extension settings.
 
